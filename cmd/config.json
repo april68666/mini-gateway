@@ -1,0 +1,25 @@
+{
+  "port": 8080,
+  "middlewares": [
+    {
+      "name": "logging",
+      "order": 0,
+      "args": null
+    }
+  ],
+  "endpoints": [
+    {
+      "uris": [
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:8001",
+        "http://127.0.0.1:8002"
+      ],
+      "protocol": "http",
+      "timeout": 2000,
+      "predicates": {
+        "path": "ping",
+        "method": "GET"
+      }
+    }
+  ]
+}

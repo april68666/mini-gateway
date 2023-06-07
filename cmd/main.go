@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"flag"
 	"fmt"
 	"mini-gateway/client"
 	"mini-gateway/config"
@@ -17,32 +19,34 @@ import (
 	"time"
 )
 
+var (
+	configFile string
+)
+
+func init() {
+	flag.StringVar(&configFile, "conf", "config.json", "config path, eg: -conf config.json")
+}
+
 func main() {
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 		slog.Flush(ctx)
 	}()
-	c := config.Gateway{
-		Port: 8080,
-		Middlewares: []*config.Middleware{
-			{
-				Name:  "logging",
-				Order: 0,
-				Args:  nil,
-			},
-		},
-		Endpoints: []*config.Endpoint{{
-			Uris:     []string{"http://127.0.0.1:8000", "http://127.0.0.1:8001", "http://127.0.0.1:8002"},
-			Protocol: "http",
-			Timeout:  2000,
-			Predicates: &config.Predicates{
-				Path:   "ping",
-				Method: "GET",
-			},
-			Middlewares: nil,
-		}},
+	flag.Parse()
+
+	fileBytes, err := os.ReadFile(configFile)
+	if err != nil {
+		slog.Error(err.Error())
+		return
 	}
+	var c *config.Gateway
+	err = json.Unmarshal(fileBytes, &c)
+	if err != nil {
+		slog.Error("Error parsing JSON:", err)
+		return
+	}
+
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", c.Port))
 	if err != nil {
 		slog.Fatal(err.Error())
@@ -57,6 +61,41 @@ func main() {
 		if err != nil && err != http.ErrServerClosed {
 			slog.Fatal(err.Error())
 			return
+		}
+	}()
+
+	go func() {
+		fileInfo, err := os.Stat(configFile)
+		if err != nil {
+			slog.Error(err.Error())
+			return
+		}
+		lastModifiedTime := fileInfo.ModTime()
+
+		for {
+			time.Sleep(1 * time.Second)
+			fileInfo, err := os.Stat(configFile)
+			if err != nil {
+				slog.Error(err.Error())
+				continue
+			}
+			if fileInfo.ModTime() != lastModifiedTime {
+				slog.Info("File %s has been modified", configFile)
+				lastModifiedTime = fileInfo.ModTime()
+
+				fileBytes, err := os.ReadFile(configFile)
+				if err != nil {
+					slog.Error(err.Error())
+					continue
+				}
+
+				err = json.Unmarshal(fileBytes, &c)
+				if err != nil {
+					slog.Error("Error parsing JSON:", err)
+					continue
+				}
+				p.LoadOrUpdateEndpoints(c.Endpoints)
+			}
 		}
 	}()
 

@@ -4,6 +4,7 @@ import (
 	"golang.org/x/net/http2"
 	"mini-gateway/config"
 	"mini-gateway/selector"
+	"mini-gateway/slog"
 	"net/http"
 	"net/url"
 )
@@ -17,7 +18,8 @@ func NewFactory() Factory {
 		for _, uri := range endpoint.Uris {
 			parse, err := url.Parse(uri)
 			if err != nil {
-				return nil, err
+				slog.Error(err.Error())
+				continue
 			}
 
 			c := defaultHttpClient
