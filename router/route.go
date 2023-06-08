@@ -37,7 +37,7 @@ func (r *Route) match(req *http.Request) bool {
 		return false
 	}
 
-	if !r.mathHeader(req.Header) {
+	if !r.matchHeader(req.Header) {
 		return false
 	}
 
@@ -61,7 +61,7 @@ func (r *Route) matchPath(path string) bool {
 	return true
 }
 
-func (r *Route) mathHeader(header http.Header) bool {
+func (r *Route) matchHeader(header http.Header) bool {
 	for i := 0; i < len(r.predicates.Headers); i++ {
 		head := r.predicates.Headers[i]
 		v := header.Get(head.Key)

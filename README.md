@@ -2,7 +2,7 @@
 
 #### 缝缝补补的玩具项目
 
-##### 使用http1.1转 grpc 中间件，grpc 服务端需要注册 json 编解码器
+##### 使用 http1.1 转 grpc 中间件，grpc 服务端需要注册 json 编解码器
 
 ```go
 package codec
@@ -10,7 +10,7 @@ package codec
 import (
 	"encoding/json"
 	"google.golang.org/protobuf/encoding/protojson"
-
+	
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/protobuf/proto"
 )

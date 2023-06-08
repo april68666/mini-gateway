@@ -67,6 +67,7 @@ func main() {
 		}
 	}()
 
+	exit := make(chan struct{})
 	go func() {
 		fileInfo, err := os.Stat(configFile)
 		if err != nil {
@@ -77,27 +78,32 @@ func main() {
 
 		for {
 			time.Sleep(1 * time.Second)
-			fileInfo, err := os.Stat(configFile)
-			if err != nil {
-				slog.Error(err.Error())
-				continue
-			}
-			if fileInfo.ModTime() != lastModifiedTime {
-				slog.Info("File %s has been modified", configFile)
-				lastModifiedTime = fileInfo.ModTime()
-
-				fileBytes, err := os.ReadFile(configFile)
+			select {
+			case <-exit:
+				return
+			default:
+				fileInfo, err := os.Stat(configFile)
 				if err != nil {
 					slog.Error(err.Error())
 					continue
 				}
+				if fileInfo.ModTime() != lastModifiedTime {
+					slog.Info("File %s has been modified", configFile)
+					lastModifiedTime = fileInfo.ModTime()
 
-				err = json.Unmarshal(fileBytes, &c)
-				if err != nil {
-					slog.Error("Error parsing JSON:", err)
-					continue
+					fileBytes, err := os.ReadFile(configFile)
+					if err != nil {
+						slog.Error(err.Error())
+						continue
+					}
+
+					err = json.Unmarshal(fileBytes, &c)
+					if err != nil {
+						slog.Error("Error parsing JSON:", err)
+						continue
+					}
+					p.LoadOrUpdateEndpoints(c.Endpoints)
 				}
-				p.LoadOrUpdateEndpoints(c.Endpoints)
 			}
 		}
 	}()
@@ -105,6 +111,7 @@ func main() {
 	quit := make(chan os.Signal)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	<-quit
+	exit <- struct{}{}
 	slog.Info("Shutdown Server ...")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
