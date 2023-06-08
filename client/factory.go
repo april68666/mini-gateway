@@ -1,12 +1,16 @@
 package client
 
 import (
+	"context"
+	"crypto/tls"
 	"golang.org/x/net/http2"
 	"mini-gateway/config"
 	"mini-gateway/selector"
 	"mini-gateway/slog"
+	"net"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 type Factory func(endpoint *config.Endpoint) (http.RoundTripper, error)
@@ -40,8 +44,8 @@ func NewFactory() Factory {
 
 var defaultHttpClient = &http.Client{
 	Transport: &http.Transport{
-		MaxIdleConns:        10000,
-		MaxIdleConnsPerHost: 0,
+		MaxIdleConns:        0,
+		MaxIdleConnsPerHost: 10000,
 		MaxConnsPerHost:     10000,
 		DisableCompression:  true,
 	},
@@ -51,5 +55,8 @@ var defaultHttp2Client = &http.Client{
 	Transport: &http2.Transport{
 		DisableCompression: true,
 		AllowHTTP:          true,
+		DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
+			return net.DialTimeout(network, addr, 300*time.Millisecond)
+		},
 	},
 }

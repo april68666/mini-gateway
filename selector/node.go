@@ -4,6 +4,7 @@ import "net/http"
 
 func NewNode(scheme, addr, protocol string, client *http.Client) *Node {
 	return &Node{
+		scheme:   scheme,
 		addr:     addr,
 		protocol: protocol,
 		client:   client,

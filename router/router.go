@@ -22,9 +22,9 @@ func NewDefaultRouter() Router {
 func (r *defaultRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.mux.RLock()
 	for i := 0; i < len(r.routes); i++ {
-		if r.routes[0].match(req) {
+		if r.routes[i].match(req) {
 			r.mux.RUnlock()
-			r.routes[0].handler.ServeHTTP(w, req)
+			r.routes[i].handler.ServeHTTP(w, req)
 			return
 		}
 	}

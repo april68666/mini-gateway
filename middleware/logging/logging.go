@@ -15,15 +15,15 @@ func init() {
 
 func Factory(c *config.Middleware) middleware.Middleware {
 	return func(next http.RoundTripper) http.RoundTripper {
-		return &Logging{next: next}
+		return &logging{next: next}
 	}
 }
 
-type Logging struct {
+type logging struct {
 	next http.RoundTripper
 }
 
-func (l *Logging) RoundTrip(req *http.Request) (*http.Response, error) {
+func (l *logging) RoundTrip(req *http.Request) (*http.Response, error) {
 	slog.Info("logging req %s", req.URL)
 	return l.next.RoundTrip(req)
 }

@@ -17,6 +17,9 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	_ "mini-gateway/middleware/forwarding"
+	_ "mini-gateway/middleware/logging"
 )
 
 var (

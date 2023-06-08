@@ -2,9 +2,7 @@
   "port": 8080,
   "middlewares": [
     {
-      "name": "logging",
-      "order": 0,
-      "args": null
+      "name": "logging"
     }
   ],
   "endpoints": [
@@ -17,9 +15,35 @@
       "protocol": "http",
       "timeout": 2000,
       "predicates": {
-        "path": "ping",
+        "path": "/ping/*",
         "method": "GET"
       }
+    },
+    {
+      "uris": [
+        "http://127.0.0.1:8003"
+      ],
+      "protocol": "grpc",
+      "timeout": 2000,
+      "predicates": {
+        "path": "/hello.Greater/*",
+        "method": "POST"
+      },
+      "middlewares": [
+        {
+          "name": "grpc",
+          "args": [
+            {
+              "key": "http_status",
+              "value": "400"
+            },
+            {
+              "key": "grpc_error_template",
+              "value": "{\"code\": {status},\"message\": \"{message}\"}"
+            }
+          ]
+        }
+      ]
     }
   ]
 }
