@@ -14,7 +14,7 @@ type client struct {
 }
 
 func (c *client) RoundTrip(req *http.Request) (resp *http.Response, err error) {
-	node, err := c.selector.Select()
+	node, err := c.selector.Select(req.Context())
 	if err != nil {
 		return nil, err
 	}

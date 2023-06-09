@@ -1,6 +1,7 @@
 package rotation
 
 import (
+	"context"
 	"errors"
 	"mini-gateway/selector"
 	"sync/atomic"
@@ -25,7 +26,7 @@ type rotationSelector struct {
 	nodes []*selector.Node
 }
 
-func (s *rotationSelector) Select() (*selector.Node, error) {
+func (s *rotationSelector) Select(ctx context.Context) (*selector.Node, error) {
 	nodes := s.nodes
 	if len(nodes) == 0 {
 		return nil, errors.New("node not found")

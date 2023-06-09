@@ -1,6 +1,7 @@
 package weight
 
 import (
+	"context"
 	"errors"
 	"math/rand"
 	"mini-gateway/selector"
@@ -24,7 +25,7 @@ type weight struct {
 	nodes []*selector.Node
 }
 
-func (s *weight) Select() (*selector.Node, error) {
+func (s *weight) Select(ctx context.Context) (*selector.Node, error) {
 	nodes := s.nodes
 	if len(nodes) == 0 {
 		return nil, errors.New("node not found")

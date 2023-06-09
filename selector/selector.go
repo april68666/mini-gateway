@@ -1,13 +1,14 @@
 package selector
 
 import (
+	"context"
 	"sync"
 )
 
 var selectorFactory = sync.Map{}
 
 type Selector interface {
-	Select() (*Node, error)
+	Select(ctx context.Context) (*Node, error)
 	Update(nodes []*Node)
 }
 
