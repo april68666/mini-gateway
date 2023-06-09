@@ -7,12 +7,17 @@ type Gateway struct {
 }
 
 type Endpoint struct {
-	Uris        []string      `json:"uris"`
+	Targets     []Target      `json:"targets"`
 	Protocol    string        `json:"protocol"`
 	Timeout     int           `json:"timeout"`
 	LoadBalance string        `json:"load_balance"`
 	Predicates  *Predicates   `json:"predicates"`
 	Middlewares []*Middleware `json:"middlewares"`
+}
+
+type Target struct {
+	Uri    string `json:"uri"`
+	Weight int    `json:"weight"`
 }
 
 type Predicates struct {

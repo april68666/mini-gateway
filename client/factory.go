@@ -20,8 +20,8 @@ func NewFactory() Factory {
 	return func(endpoint *config.Endpoint) (http.RoundTripper, error) {
 		nodes := make([]*selector.Node, 0)
 
-		for _, uri := range endpoint.Uris {
-			parse, err := url.Parse(uri)
+		for _, target := range endpoint.Targets {
+			parse, err := url.Parse(target.Uri)
 			if err != nil {
 				slog.Error(err.Error())
 				continue
@@ -32,7 +32,7 @@ func NewFactory() Factory {
 				c = defaultHttp2Client
 			}
 
-			node := selector.NewNode(parse.Scheme, parse.Host, endpoint.Protocol, c)
+			node := selector.NewNode(parse.Scheme, parse.Host, endpoint.Protocol, target.Weight, c)
 			nodes = append(nodes, node)
 		}
 

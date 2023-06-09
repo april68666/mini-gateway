@@ -7,25 +7,37 @@
   ],
   "endpoints": [
     {
-      "uris": [
-        "http://127.0.0.1:8000",
-        "http://127.0.0.1:8001",
-        "http://127.0.0.1:8002"
+      "targets": [
+        {
+          "uri": "http://127.0.0.1:8000",
+          "weight": 100
+        },
+        {
+          "uri": "http://127.0.0.1:8001",
+          "weight": 300
+        },
+        {
+          "uri": "http://127.0.0.1:8002",
+          "weight": 600
+        }
       ],
       "protocol": "http",
       "timeout": 2000,
+      "load_balance": "weight",
       "predicates": {
         "path": "/ping/*",
         "method": "GET"
       }
     },
     {
-      "uris": [
-        "http://127.0.0.1:8003"
+      "targets": [
+        {
+          "uri": "http://127.0.0.1:8003",
+          "weight": 100
+        }
       ],
       "protocol": "grpc",
       "timeout": 2000,
-      "load_balance": "rotation",
       "predicates": {
         "path": "/hello.Greater/*",
         "method": "POST"
