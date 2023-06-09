@@ -50,19 +50,26 @@ func (p *Proxy) buildEndpoints(endpoint *config.Endpoint, ms []*config.Middlewar
 
 	return http.Handler(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		ctx := reqcontext.WithEndpoint(req.Context(), endpoint)
-		ctx, cancel := context.WithTimeout(ctx, time.Millisecond*time.Duration(endpoint.Timeout))
-		defer cancel()
+		if endpoint.Timeout > 0 {
+			_ctx, cancel := context.WithTimeout(ctx, time.Millisecond*time.Duration(endpoint.Timeout))
+			defer cancel()
+			ctx = _ctx
+		}
+
 		p.setXForwarded(req)
+
 		body, err := io.ReadAll(req.Body)
 		if err != nil {
 			w.WriteHeader(http.StatusBadGateway)
 			slog.Error(err.Error())
 			return
 		}
+
 		req.GetBody = func() (io.ReadCloser, error) {
 			reader := bytes.NewReader(body)
 			return io.NopCloser(reader), nil
 		}
+
 		reader := bytes.NewReader(body)
 		req.Body = io.NopCloser(reader)
 		resp, err := tripper.RoundTrip(req.Clone(ctx))
@@ -71,6 +78,7 @@ func (p *Proxy) buildEndpoints(endpoint *config.Endpoint, ms []*config.Middlewar
 			slog.Error(err.Error())
 			return
 		}
+
 		headers := w.Header()
 		for k, v := range resp.Header {
 			headers[k] = v

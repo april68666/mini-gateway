@@ -10,6 +10,7 @@ type Endpoint struct {
 	Uris        []string      `json:"uris"`
 	Protocol    string        `json:"protocol"`
 	Timeout     int           `json:"timeout"`
+	LoadBalance string        `json:"load_balance"`
 	Predicates  *Predicates   `json:"predicates"`
 	Middlewares []*Middleware `json:"middlewares"`
 }

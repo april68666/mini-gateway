@@ -20,6 +20,7 @@ import (
 
 	_ "mini-gateway/middleware/forwarding"
 	_ "mini-gateway/middleware/logging"
+	_ "mini-gateway/selector/rotation"
 )
 
 var (

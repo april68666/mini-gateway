@@ -25,6 +25,7 @@
       ],
       "protocol": "grpc",
       "timeout": 2000,
+      "load_balance": "rotation",
       "predicates": {
         "path": "/hello.Greater/*",
         "method": "POST"

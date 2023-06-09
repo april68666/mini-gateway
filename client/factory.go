@@ -6,6 +6,7 @@ import (
 	"golang.org/x/net/http2"
 	"mini-gateway/config"
 	"mini-gateway/selector"
+	"mini-gateway/selector/rotation"
 	"mini-gateway/slog"
 	"net"
 	"net/http"
@@ -35,10 +36,15 @@ func NewFactory() Factory {
 			nodes = append(nodes, node)
 		}
 
-		rotationSelector := selector.NewRotationSelector()
-		rotationSelector.Update(nodes)
+		f, ok := selector.Get(endpoint.LoadBalance)
+		if !ok {
+			slog.Warn("could not find load balancer selector %s,rotation is used by default", endpoint.LoadBalance)
+			f = rotation.Factor
+		}
+		s := f()
+		s.Update(nodes)
 
-		return newClient(rotationSelector), nil
+		return newClient(s), nil
 	}
 }
 
