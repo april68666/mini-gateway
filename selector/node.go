@@ -2,11 +2,12 @@ package selector
 
 import "net/http"
 
-func NewNode(scheme, addr, protocol string, weight int, client *http.Client) *Node {
+func NewNode(scheme, addr, protocol, color string, weight int, client *http.Client) *Node {
 	return &Node{
 		scheme:   scheme,
 		addr:     addr,
 		protocol: protocol,
+		color:    color,
 		weight:   weight,
 		client:   client,
 	}
@@ -17,6 +18,7 @@ type Node struct {
 	addr     string
 	protocol string
 	weight   int
+	color    string
 	client   *http.Client
 }
 
@@ -34,6 +36,10 @@ func (n *Node) Protocol() string {
 
 func (n *Node) Weight() int {
 	return n.weight
+}
+
+func (n *Node) Color() string {
+	return n.color
 }
 
 func (n *Node) Client() *http.Client {

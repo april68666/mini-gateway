@@ -2,8 +2,8 @@ package weight
 
 import (
 	"context"
-	"errors"
 	"math/rand"
+	"mini-gateway/reqcontext"
 	"mini-gateway/selector"
 )
 
@@ -22,24 +22,32 @@ func newWeightSelector() *weight {
 }
 
 type weight struct {
-	nodes []*selector.Node
+	nodes map[string]*node
 }
 
 func (s *weight) Select(ctx context.Context) (*selector.Node, error) {
-	nodes := s.nodes
-	if len(nodes) == 0 {
-		return nil, errors.New("node not found")
-	}
-	index := rand.Intn(len(nodes))
-	return nodes[index], nil
+	color, _ := reqcontext.Color(ctx)
+	n := s.nodes[color]
+	index := rand.Intn(len(n.nodes))
+	return n.nodes[index], nil
 }
 
 func (s *weight) Update(nodes []*selector.Node) {
-	ns := make([]*selector.Node, 0)
-	for _, node := range nodes {
-		for i := 0; i < node.Weight(); i++ {
-			ns = append(ns, node)
+	ns := make(map[string]*node)
+	for _, n := range nodes {
+		for i := 0; i < n.Weight(); i++ {
+			if v, ok := ns[n.Color()]; ok {
+				v.nodes = append(v.nodes, n)
+			} else {
+				newNode := &node{}
+				newNode.nodes = append(newNode.nodes, n)
+				ns[n.Color()] = newNode
+			}
 		}
 	}
 	s.nodes = ns
+}
+
+type node struct {
+	nodes []*selector.Node
 }

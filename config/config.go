@@ -18,6 +18,7 @@ type Endpoint struct {
 type Target struct {
 	Uri    string `json:"uri"`
 	Weight int    `json:"weight"`
+	Color  string `json:"color"`
 }
 
 type Predicates struct {

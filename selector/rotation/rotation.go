@@ -2,7 +2,7 @@ package rotation
 
 import (
 	"context"
-	"errors"
+	"mini-gateway/reqcontext"
 	"mini-gateway/selector"
 	"sync/atomic"
 )
@@ -18,27 +18,39 @@ func Factor() selector.Selector {
 }
 
 func newRotationSelector() *rotationSelector {
-	return &rotationSelector{index: -1}
+	return &rotationSelector{}
 }
 
 type rotationSelector struct {
-	index int32
-	nodes []*selector.Node
+	nodes map[string]*node
 }
 
 func (s *rotationSelector) Select(ctx context.Context) (*selector.Node, error) {
-	nodes := s.nodes
-	if len(nodes) == 0 {
-		return nil, errors.New("node not found")
-	}
-	index := atomic.AddInt32(&s.index, 1)
-	if index >= int32(len(nodes)) {
-		atomic.StoreInt32(&s.index, 0)
+	color, _ := reqcontext.Color(ctx)
+	n := s.nodes[color]
+	index := atomic.AddInt32(&n.index, 1)
+	if index >= int32(len(n.nodes)) {
+		atomic.StoreInt32(&n.index, 0)
 		index = 0
 	}
-	return nodes[index], nil
+	return n.nodes[index], nil
 }
 
 func (s *rotationSelector) Update(nodes []*selector.Node) {
-	s.nodes = nodes
+	ns := make(map[string]*node)
+	for _, n := range nodes {
+		if v, ok := ns[n.Color()]; ok {
+			v.nodes = append(v.nodes, n)
+		} else {
+			newNode := &node{index: -1}
+			newNode.nodes = append(newNode.nodes, n)
+			ns[n.Color()] = newNode
+		}
+	}
+	s.nodes = ns
+}
+
+type node struct {
+	index int32
+	nodes []*selector.Node
 }

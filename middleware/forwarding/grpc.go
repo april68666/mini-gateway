@@ -51,7 +51,7 @@ type grpc struct {
 
 func (g *grpc) RoundTrip(req *http.Request) (*http.Response, error) {
 	contentType := req.Header.Get("Content-Type")
-	endpoint := reqcontext.Endpoint(req.Context())
+	endpoint, _ := reqcontext.Endpoint(req.Context())
 	if (endpoint != nil && strings.ToLower(endpoint.Protocol) != "grpc") || strings.HasSuffix(contentType, "application/grpc") {
 		return g.next.RoundTrip(req)
 	}

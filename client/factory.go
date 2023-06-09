@@ -32,7 +32,7 @@ func NewFactory() Factory {
 				c = defaultHttp2Client
 			}
 
-			node := selector.NewNode(parse.Scheme, parse.Host, endpoint.Protocol, target.Weight, c)
+			node := selector.NewNode(parse.Scheme, parse.Host, endpoint.Protocol, target.Color, target.Weight, c)
 			nodes = append(nodes, node)
 		}
 

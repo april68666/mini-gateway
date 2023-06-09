@@ -1,6 +1,6 @@
 # mini-gateway
 
-#### 缝缝补补的玩具项目
+#### 一个简单的 API 网关
 
 ##### 使用 http1.1 转 grpc 中间件，grpc 服务端需要注册 json 编解码器
 

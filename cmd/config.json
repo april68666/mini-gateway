@@ -10,7 +10,8 @@
       "targets": [
         {
           "uri": "http://127.0.0.1:8000",
-          "weight": 100
+          "weight": 100,
+          "color": "test-service"
         },
         {
           "uri": "http://127.0.0.1:8001",
@@ -23,7 +24,7 @@
       ],
       "protocol": "http",
       "timeout": 2000,
-      "load_balance": "weight",
+      "load_balance": "rotation",
       "predicates": {
         "path": "/ping/*",
         "method": "GET"
