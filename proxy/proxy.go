@@ -16,18 +16,16 @@ import (
 	"time"
 )
 
-func NewProxy(factory client.Factory, router router.Router, ms []*config.Middleware) *Proxy {
+func NewProxy(factory client.Factory, router router.Router) *Proxy {
 	return &Proxy{
-		router:     router,
-		factory:    factory,
-		middleware: ms,
+		router:  router,
+		factory: factory,
 	}
 }
 
 type Proxy struct {
-	router     router.Router
-	factory    client.Factory
-	middleware []*config.Middleware
+	router  router.Router
+	factory client.Factory
 }
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -135,10 +133,10 @@ func (p *Proxy) buildEndpoints(endpoint *config.Endpoint, ms []*config.Middlewar
 	})), nil
 }
 
-func (p *Proxy) LoadOrUpdateEndpoints(endpoints []*config.Endpoint) {
+func (p *Proxy) LoadOrUpdateEndpoints(gateway *config.Gateway) {
 	routes := make([]*router.Route, 0)
-	for _, endpoint := range endpoints {
-		handler, err := p.buildEndpoints(endpoint, p.middleware)
+	for _, endpoint := range gateway.Endpoints {
+		handler, err := p.buildEndpoints(endpoint, gateway.Middlewares)
 		if err != nil {
 			return
 		}

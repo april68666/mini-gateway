@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -141,8 +142,8 @@ func (s *Slog) fmtPrint(info *logInfo) {
 }
 
 func (s *Slog) getLocation(skip int) string {
-	_, fine, line, _ := runtime.Caller(skip)
-	return fmt.Sprintf("%s:%d", fine, line)
+	_, file, line, _ := runtime.Caller(skip)
+	return fmt.Sprintf("%s:%d", path.Base(file), line)
 }
 
 // Flush 等待所有日志写入完成，成功返回 true 超时返回 false

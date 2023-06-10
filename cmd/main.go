@@ -18,8 +18,11 @@ import (
 	"syscall"
 	"time"
 
+	_ "mini-gateway/middleware/cors"
 	_ "mini-gateway/middleware/forwarding"
+	_ "mini-gateway/middleware/jwt"
 	_ "mini-gateway/middleware/logging"
+	_ "mini-gateway/middleware/stripprefix"
 	_ "mini-gateway/selector/rotation"
 	_ "mini-gateway/selector/weight"
 )
@@ -58,8 +61,8 @@ func main() {
 		return
 	}
 	slog.Info(" Listening and serving HTTP on %s", listener.Addr().String())
-	p := proxy.NewProxy(client.NewFactory(), router.NewDefaultRouter(), c.Middlewares)
-	p.LoadOrUpdateEndpoints(c.Endpoints)
+	p := proxy.NewProxy(client.NewFactory(), router.NewDefaultRouter())
+	p.LoadOrUpdateEndpoints(c)
 	serv := server.NewHttpServer(p)
 	go func() {
 		err := serv.Run(listener)
@@ -98,13 +101,13 @@ func main() {
 						slog.Error(err.Error())
 						continue
 					}
-
+					c = &config.Gateway{}
 					err = json.Unmarshal(fileBytes, &c)
 					if err != nil {
 						slog.Error("Error parsing JSON:", err)
 						continue
 					}
-					p.LoadOrUpdateEndpoints(c.Endpoints)
+					p.LoadOrUpdateEndpoints(c)
 				}
 			}
 		}

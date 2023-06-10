@@ -2,27 +2,25 @@ package router
 
 import (
 	"mini-gateway/config"
+	"mini-gateway/router/trie"
 	"net/http"
 	"strings"
 )
 
 func NewRoute(predicates *config.Predicates, handler http.Handler) *Route {
-	pathKv := make(map[int]string)
-	ss := strings.Split(strings.Trim(predicates.Path, "/"), "/")
-	for i := 0; i < len(ss); i++ {
-		pathKv[i] = ss[i]
-	}
+	t := trie.NewTrie()
+	t.Insert(predicates.Path, handler)
 	return &Route{
-		pathKv:     pathKv,
-		predicates: predicates,
+		trie:       t,
 		handler:    handler,
+		predicates: predicates,
 	}
 }
 
 type Route struct {
-	pathKv     map[int]string
-	predicates *config.Predicates
+	trie       *trie.Trie
 	handler    http.Handler
+	predicates *config.Predicates
 }
 
 func (r *Route) match(req *http.Request) bool {
@@ -33,7 +31,7 @@ func (r *Route) match(req *http.Request) bool {
 		}
 	}
 
-	if !r.matchPath(req.URL.Path) {
+	if strings.TrimSpace(r.predicates.Path) != "" && !r.matchPath(req.URL.Path) {
 		return false
 	}
 
@@ -45,20 +43,8 @@ func (r *Route) match(req *http.Request) bool {
 }
 
 func (r *Route) matchPath(path string) bool {
-	ss := strings.Split(strings.Trim(path, "/"), "/")
-	for i := 0; i < len(ss); i++ {
-		v, ok := r.pathKv[i]
-		if !ok {
-			break
-		}
-		if ok && v == "*" {
-			break
-		}
-		if ok && v != ss[i] {
-			return false
-		}
-	}
-	return true
+	_, _, b := r.trie.Search(path)
+	return b
 }
 
 func (r *Route) matchHeader(header http.Header) bool {

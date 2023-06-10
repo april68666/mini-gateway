@@ -2,7 +2,19 @@
   "port": 8080,
   "middlewares": [
     {
+      "name": "cors"
+    },
+    {
       "name": "logging"
+    },
+    {
+      "name": "jwt",
+      "args": [
+        {
+          "key": "skipValidUrl",
+          "value": "/test-service/ping"
+        }
+      ]
     }
   ],
   "endpoints": [
@@ -26,9 +38,19 @@
       "timeout": 2000,
       "load_balance": "rotation",
       "predicates": {
-        "path": "/ping/*",
+        "path": "test-service/*",
         "method": "GET"
-      }
+      },
+      "middlewares": [
+        {
+          "name": "strip_prefix",
+          "args": [
+            {
+              "key": "1"
+            }
+          ]
+        }
+      ]
     },
     {
       "targets": [
