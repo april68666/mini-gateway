@@ -9,6 +9,7 @@ import (
 	"mini-gateway/middleware"
 	"mini-gateway/reqcontext"
 	"mini-gateway/router"
+	"mini-gateway/router/route"
 	"mini-gateway/slog"
 	"net"
 	"net/http"
@@ -150,13 +151,13 @@ func (p *Proxy) LoadOrUpdateEndpoints(gateway *config.Gateway) {
 			slog.Error("%s", buf[:n])
 		}
 	}()
-	routes := make([]*router.Route, 0)
+	routes := make([]*route.Route, 0)
 	for _, endpoint := range gateway.Http.Endpoints {
 		handler, err := p.buildEndpoints(endpoint, gateway.Http.Middlewares)
 		if err != nil {
 			return
 		}
-		routes = append(routes, router.NewRoute(endpoint.Predicates, handler))
+		routes = append(routes, route.NewRoute(endpoint.Predicates, handler))
 	}
 	p.router.LoadOrUpdateRoutes(routes)
 }
