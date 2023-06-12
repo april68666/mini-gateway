@@ -21,10 +21,10 @@ func Factory(c *config.Middleware) middleware.Middleware {
 	httpStatus := 400
 	errorTemplate := "{\"code\": {status},\"message\": \"{message}\"}"
 
-	if v, ok := c.Args["http_status"]; ok {
+	if v, ok := c.Args["httpStatus"]; ok {
 		httpStatus = v.(int)
 	}
-	if v, ok := c.Args["grpc_error_template"]; ok {
+	if v, ok := c.Args["grpcErrorTemplate"]; ok {
 		errorTemplate = v.(string)
 	}
 	return func(next http.RoundTripper) http.RoundTripper {

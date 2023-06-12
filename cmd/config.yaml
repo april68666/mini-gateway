@@ -14,9 +14,9 @@ http:
           weight: 600
       protocol: http
       timeout: 2000
-      load_balance: rotation
+      loadBalance: rotation
       predicates:
-        path: test-service/*
+        path: test-service/*/{id}
         method: GET
       middlewares:
         - name: strip_prefix
@@ -33,5 +33,5 @@ http:
       middlewares:
         - name: grpc
           args:
-            http_status: 400
-            grpc_error_template: '{"code": {status},"message": "{message}"}'
+            httpStatus: 400
+            grpcErrorTemplate: '{"code": {status},"message": "{message}"}'

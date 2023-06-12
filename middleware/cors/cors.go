@@ -20,19 +20,19 @@ func Factory(c *config.Middleware) middleware.Middleware {
 	exposeHeaders := "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers, Content-Type"
 	credentials := "true"
 
-	if v, ok := c.Args["allow-origin"]; ok {
+	if v, ok := c.Args["allowOrigin"]; ok {
 		allowOrigin = v.(string)
 	}
 
-	if v, ok := c.Args["allow-headers"]; ok {
+	if v, ok := c.Args["allowHeaders"]; ok {
 		allowHeaders = v.(string)
 	}
 
-	if v, ok := c.Args["allow-method"]; ok {
+	if v, ok := c.Args["allowMethod"]; ok {
 		allowMethod = v.(string)
 	}
 
-	if v, ok := c.Args["expose-headers"]; ok {
+	if v, ok := c.Args["exposeHeaders"]; ok {
 		exposeHeaders = v.(string)
 	}
 

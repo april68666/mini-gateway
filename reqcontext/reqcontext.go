@@ -24,3 +24,12 @@ func Color(ctx context.Context) (string, bool) {
 	color, b := ctx.Value(contextKey("color")).(string)
 	return color, b
 }
+
+func WithParams(ctx context.Context, params map[string]string) context.Context {
+	return context.WithValue(ctx, contextKey("params"), params)
+}
+
+func Params(ctx context.Context) (map[string]string, bool) {
+	params, b := ctx.Value(contextKey("params")).(map[string]string)
+	return params, b
+}

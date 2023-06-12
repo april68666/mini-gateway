@@ -1,6 +1,7 @@
 package router
 
 import (
+	"mini-gateway/reqcontext"
 	"mini-gateway/router/route"
 	"mini-gateway/router/trie"
 	"net/http"
@@ -20,8 +21,11 @@ func NewDefaultRouter() Router {
 }
 
 func (r *defaultRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	if _, r, b := r.trie.Search(req.URL.Path); b {
+	if params, r, b := r.trie.Search(req.URL.Path); b {
 		if r.Match(req) {
+			if params != nil && len(params) > 0 {
+				req = req.WithContext(reqcontext.WithParams(req.Context(), params))
+			}
 			r.Handler().ServeHTTP(w, req)
 			return
 		}

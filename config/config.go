@@ -14,7 +14,7 @@ type Endpoint struct {
 	Targets     []Target      `yaml:"targets"`
 	Protocol    string        `yaml:"protocol"`
 	Timeout     int           `yaml:"timeout"`
-	LoadBalance string        `yaml:"load_balance"`
+	LoadBalance string        `yaml:"loadBalance"`
 	Predicates  *Predicates   `yaml:"predicates"`
 	Middlewares []*Middleware `yaml:"middlewares"`
 }
