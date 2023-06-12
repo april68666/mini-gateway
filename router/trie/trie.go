@@ -1,29 +1,28 @@
 package trie
 
 import (
-	"net/http"
 	"strings"
 )
 
-type Trie struct {
-	children map[string]*Trie
+type Trie[T comparable] struct {
+	children map[string]*Trie[T]
 	wildCard bool
-	handler  http.Handler
+	value    T
 }
 
-func NewTrie() *Trie {
-	root := &Trie{}
-	root.children = make(map[string]*Trie)
+func NewTrie[T comparable]() *Trie[T] {
+	root := &Trie[T]{}
+	root.children = make(map[string]*Trie[T])
 	root.wildCard = false
 	return root
 }
 
-func (t *Trie) Insert(path string, handler http.Handler) {
+func (t *Trie[T]) Insert(path string, value T) {
 	node := t
 	path = strings.Trim(path, "/")
 	for _, v := range strings.Split(path, "/") {
 		if node.children[v] == nil {
-			node.children[v] = NewTrie()
+			node.children[v] = NewTrie[T]()
 		}
 		if v == "*" || strings.HasPrefix(v, "{") && strings.HasSuffix(v, "}") {
 			node.wildCard = true
@@ -31,10 +30,11 @@ func (t *Trie) Insert(path string, handler http.Handler) {
 		node = node.children[v]
 	}
 	node.wildCard = true
-	node.handler = handler
+	node.value = value
 }
 
-func (t *Trie) Search(path string) (map[string]string, http.Handler, bool) {
+func (t *Trie[T]) Search(path string) (map[string]string, T, bool) {
+	var zero T
 	node := t
 	path = strings.Trim(path, "/")
 	params := make(map[string]string)
@@ -49,13 +49,13 @@ func (t *Trie) Search(path string) (map[string]string, http.Handler, bool) {
 			}
 		}
 		if node.children[v] == nil {
-			return nil, nil, false
+			return nil, zero, false
 		}
 		node = node.children[v]
 	}
 
 	if len(node.children) == 0 {
-		return params, node.handler, node.wildCard
+		return params, node.value, node.wildCard
 	}
-	return nil, nil, false
+	return nil, zero, false
 }

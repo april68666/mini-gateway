@@ -21,7 +21,7 @@ func Factory(c *config.Middleware) middleware.Middleware {
 		secret = v.(string)
 	}
 
-	t := trie.NewTrie()
+	t := trie.NewTrie[any]()
 	if v, ok := c.Args["skip_valid_url"]; ok {
 		ss := strings.Split(v.(string), ",")
 		for _, s := range ss {
@@ -41,7 +41,7 @@ func Factory(c *config.Middleware) middleware.Middleware {
 type jWt struct {
 	secret       string
 	skipValidUrl string
-	trie         *trie.Trie
+	trie         *trie.Trie[any]
 	next         http.RoundTripper
 }
 

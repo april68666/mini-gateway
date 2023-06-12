@@ -8,8 +8,11 @@ import (
 )
 
 func NewRoute(predicates *config.Predicates, handler http.Handler) *Route {
-	t := trie.NewTrie()
-	t.Insert(predicates.Path, handler)
+	t := trie.NewTrie[http.Handler]()
+	ps := strings.Split(predicates.Path, ",")
+	for _, path := range ps {
+		t.Insert(path, handler)
+	}
 	return &Route{
 		trie:       t,
 		handler:    handler,
@@ -18,17 +21,14 @@ func NewRoute(predicates *config.Predicates, handler http.Handler) *Route {
 }
 
 type Route struct {
-	trie       *trie.Trie
+	trie       *trie.Trie[http.Handler]
 	handler    http.Handler
 	predicates *config.Predicates
 }
 
 func (r *Route) match(req *http.Request) bool {
-	method := strings.TrimSpace(r.predicates.Method)
-	if method != "" {
-		if strings.ToUpper(method) != req.Method {
-			return false
-		}
+	if !r.matchMethod(req.Method) {
+		return false
 	}
 
 	if strings.TrimSpace(r.predicates.Path) != "" && !r.matchPath(req.URL.Path) {
@@ -42,13 +42,27 @@ func (r *Route) match(req *http.Request) bool {
 	return true
 }
 
+func (r *Route) matchMethod(method string) bool {
+	match := false
+	ms := strings.Split(strings.TrimSpace(r.predicates.Method), ",")
+	if len(ms) > 0 {
+		for _, m := range ms {
+			if strings.ToUpper(m) == strings.ToUpper(method) {
+				match = true
+				break
+			}
+		}
+
+	}
+	return match
+}
+
 func (r *Route) matchPath(path string) bool {
 	_, _, b := r.trie.Search(path)
 	return b
 }
 
 func (r *Route) matchHeader(header http.Header) bool {
-
 	for key, value := range r.predicates.Headers {
 		v := header.Get(key)
 		if v == "" || v != value {
