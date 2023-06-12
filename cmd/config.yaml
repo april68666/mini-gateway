@@ -19,14 +19,14 @@ http:
         path: test-service/*/{id}
         method: GET
       middlewares:
-        - name: strip_prefix
+        - name: stripPrefix
           args:
             call: 1
     - targets:
         - uri: http://127.0.0.1:8003
           weight: 100
       protocol: grpc
-      timeout: 2000
+#      timeout: 2000
       predicates:
         path: /hello.Greater/*
         method: POST

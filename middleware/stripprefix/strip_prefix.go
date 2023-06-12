@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-const NAME = "strip_prefix"
+const NAME = "stripPrefix"
 
 func init() {
 	middleware.Register(NAME, Factory)

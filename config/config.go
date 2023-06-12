@@ -1,7 +1,7 @@
 package config
 
 type Gateway struct {
-	Http *Http `json:"http"`
+	Http *Http `yaml:"http"`
 }
 
 type Http struct {

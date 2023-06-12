@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"mini-gateway/reqcontext"
 	"mini-gateway/selector"
+	"sync/atomic"
 )
 
 const NAME = "weight"
@@ -22,12 +23,13 @@ func newWeightSelector() *weight {
 }
 
 type weight struct {
-	nodes map[string]*node
+	nodes atomic.Value
+	// nodes map[string]*node
 }
 
 func (s *weight) Select(ctx context.Context) (*selector.Node, error) {
 	color, _ := reqcontext.Color(ctx)
-	n := s.nodes[color]
+	n := s.nodes.Load().(map[string]*node)[color]
 	index := rand.Intn(len(n.nodes))
 	return n.nodes[index], nil
 }
@@ -45,7 +47,7 @@ func (s *weight) Update(nodes []*selector.Node) {
 			}
 		}
 	}
-	s.nodes = ns
+	s.nodes.Store(ns)
 }
 
 type node struct {

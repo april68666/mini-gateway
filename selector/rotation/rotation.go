@@ -22,12 +22,13 @@ func newRotationSelector() *rotationSelector {
 }
 
 type rotationSelector struct {
-	nodes map[string]*node
+	nodes atomic.Value
+	// nodes map[string]*node
 }
 
 func (s *rotationSelector) Select(ctx context.Context) (*selector.Node, error) {
 	color, _ := reqcontext.Color(ctx)
-	n := s.nodes[color]
+	n := s.nodes.Load().(map[string]*node)[color]
 	index := atomic.AddInt32(&n.index, 1)
 	if index >= int32(len(n.nodes)) {
 		atomic.StoreInt32(&n.index, 0)
@@ -47,7 +48,7 @@ func (s *rotationSelector) Update(nodes []*selector.Node) {
 			ns[n.Color()] = newNode
 		}
 	}
-	s.nodes = ns
+	s.nodes.Store(ns)
 }
 
 type node struct {

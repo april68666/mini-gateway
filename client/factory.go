@@ -19,7 +19,6 @@ type Factory func(endpoint *config.Endpoint) (http.RoundTripper, error)
 func NewFactory() Factory {
 	return func(endpoint *config.Endpoint) (http.RoundTripper, error) {
 		nodes := make([]*selector.Node, 0)
-
 		for _, target := range endpoint.Targets {
 			parse, err := url.Parse(target.Uri)
 			if err != nil {

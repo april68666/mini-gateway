@@ -5,6 +5,7 @@ import (
 	"mini-gateway/router/route"
 	"mini-gateway/router/trie"
 	"net/http"
+	"sync/atomic"
 )
 
 type Router interface {
@@ -13,7 +14,8 @@ type Router interface {
 }
 
 type defaultRouter struct {
-	trie *trie.Trie[*route.Route]
+	trie atomic.Value
+	//trie *trie.Trie[*route.Route]
 }
 
 func NewDefaultRouter() Router {
@@ -21,7 +23,7 @@ func NewDefaultRouter() Router {
 }
 
 func (r *defaultRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	if params, r, b := r.trie.Search(req.URL.Path); b {
+	if params, r, b := r.trie.Load().(*trie.Trie[*route.Route]).Search(req.URL.Path); b {
 		if r.Match(req) {
 			if params != nil && len(params) > 0 {
 				req = req.WithContext(reqcontext.WithParams(req.Context(), params))
@@ -40,5 +42,5 @@ func (r *defaultRouter) LoadOrUpdateRoutes(routes []*route.Route) {
 			t.Insert(path, r)
 		}
 	}
-	r.trie = t
+	r.trie.Store(t)
 }

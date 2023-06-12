@@ -83,6 +83,7 @@ func (p *Proxy) buildEndpoints(endpoint *config.Endpoint, ms []*config.Middlewar
 		resp, err := tripper.RoundTrip(req.Clone(ctx))
 		if err != nil {
 			w.WriteHeader(http.StatusBadGateway)
+			// TODO 需要更详细的日志比如路由是什么url是什么，参数是什么
 			slog.Error(err.Error())
 			return
 		}
