@@ -43,9 +43,10 @@ type stripPrefix struct {
 
 func (s *stripPrefix) RoundTrip(req *http.Request) (*http.Response, error) {
 	path := req.URL.Path
-	index := strings.Index(path[1:], "/")
-	if index != -1 {
-		req.URL.Path = path[index+1:]
+	path = strings.TrimLeft(path, "/")
+	ps := strings.Split(path, "/")
+	if len(ps) >= s.call {
+		req.URL.Path = "/" + strings.Join(ps[s.call:], "/")
 	}
 	return s.next.RoundTrip(req)
 }

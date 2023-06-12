@@ -17,7 +17,7 @@ func Factory(c *config.Middleware) middleware.Middleware {
 	allowHeaders := "Content-Type,AccessToken,X-CSRF-Token, Authorization, X-Auth-Token"
 	allowMethod := "POST, GET, OPTIONS"
 	exposeHeaders := "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers, Content-Type"
-	Credentials := "true"
+	credentials := "true"
 
 	args := make(map[string]string)
 	for _, arg := range c.Args {
@@ -30,19 +30,19 @@ func Factory(c *config.Middleware) middleware.Middleware {
 	}
 
 	if v, ok := args["allow-headers"]; ok {
-		allowOrigin = v
+		allowHeaders = v
 	}
 
 	if v, ok := args["allow-method"]; ok {
-		allowOrigin = v
+		allowMethod = v
 	}
 
 	if v, ok := args["expose-headers"]; ok {
-		allowOrigin = v
+		exposeHeaders = v
 	}
 
 	if v, ok := args["credentials"]; ok {
-		allowOrigin = v
+		credentials = v
 	}
 
 	return func(next http.RoundTripper) http.RoundTripper {
@@ -51,7 +51,7 @@ func Factory(c *config.Middleware) middleware.Middleware {
 			allowHeaders:  allowHeaders,
 			allowMethod:   allowMethod,
 			exposeHeaders: exposeHeaders,
-			Credentials:   Credentials,
+			credentials:   credentials,
 			next:          next,
 		}
 	}
@@ -62,7 +62,7 @@ type cors struct {
 	allowHeaders  string
 	allowMethod   string
 	exposeHeaders string
-	Credentials   string
+	credentials   string
 	next          http.RoundTripper
 }
 
@@ -73,7 +73,7 @@ func (c *cors) RoundTrip(req *http.Request) (*http.Response, error) {
 		header.Add("Access-Control-Allow-Headers", c.allowHeaders)
 		header.Add("Access-Control-Allow-Methods", c.allowMethod)
 		header.Add("Access-Control-Expose-Headers", c.exposeHeaders)
-		header.Add("Access-Control-Allow-Credentials", c.Credentials)
+		header.Add("Access-Control-Allow-Credentials", c.credentials)
 		return &http.Response{
 			Header:     header,
 			StatusCode: http.StatusNoContent,

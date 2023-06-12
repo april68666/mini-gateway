@@ -6,15 +6,6 @@
     },
     {
       "name": "logging"
-    },
-    {
-      "name": "jwt",
-      "args": [
-        {
-          "key": "skipValidUrl",
-          "value": "/test-service/ping"
-        }
-      ]
     }
   ],
   "endpoints": [
@@ -46,7 +37,8 @@
           "name": "strip_prefix",
           "args": [
             {
-              "key": "1"
+              "key": "call",
+              "value": "1"
             }
           ]
         }
