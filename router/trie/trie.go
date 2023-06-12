@@ -23,12 +23,8 @@ func (t *Trie) Insert(path string, handler http.Handler) {
 	path = strings.Trim(path, "/")
 	for _, v := range strings.Split(path, "/") {
 		if node.children[v] == nil {
-			newNode := new(Trie)
-			newNode.children = make(map[string]*Trie)
-			newNode.wildCard = false
-			node.children[v] = newNode
+			node.children[v] = NewTrie()
 		}
-
 		if v == "*" || strings.HasPrefix(v, "{") && strings.HasSuffix(v, "}") {
 			node.wildCard = true
 		}
@@ -44,7 +40,7 @@ func (t *Trie) Search(path string) (map[string]string, http.Handler, bool) {
 	params := make(map[string]string)
 	for _, v := range strings.Split(path, "/") {
 		if node.wildCard {
-			for k, _ := range node.children {
+			for k := range node.children {
 				if strings.HasPrefix(k, "{") && strings.HasSuffix(k, "}") {
 					key := k[1 : len(k)-1]
 					params[key] = v
@@ -52,7 +48,6 @@ func (t *Trie) Search(path string) (map[string]string, http.Handler, bool) {
 				v = k
 			}
 		}
-
 		if node.children[v] == nil {
 			return nil, nil, false
 		}
