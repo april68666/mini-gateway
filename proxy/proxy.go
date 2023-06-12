@@ -12,6 +12,7 @@ import (
 	"mini-gateway/slog"
 	"net"
 	"net/http"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -134,9 +135,16 @@ func (p *Proxy) buildEndpoints(endpoint *config.Endpoint, ms []*config.Middlewar
 }
 
 func (p *Proxy) LoadOrUpdateEndpoints(gateway *config.Gateway) {
+	defer func() {
+		if err := recover(); err != nil {
+			buf := make([]byte, 64<<10)
+			n := runtime.Stack(buf, false)
+			slog.Error("%s", buf[:n])
+		}
+	}()
 	routes := make([]*router.Route, 0)
-	for _, endpoint := range gateway.Endpoints {
-		handler, err := p.buildEndpoints(endpoint, gateway.Middlewares)
+	for _, endpoint := range gateway.Http.Endpoints {
+		handler, err := p.buildEndpoints(endpoint, gateway.Http.Middlewares)
 		if err != nil {
 			return
 		}

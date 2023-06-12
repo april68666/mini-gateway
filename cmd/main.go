@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
+	"gopkg.in/yaml.v2"
 	"mini-gateway/client"
 	"mini-gateway/config"
 	"mini-gateway/proxy"
@@ -32,7 +32,7 @@ var (
 )
 
 func init() {
-	flag.StringVar(&configFile, "conf", "config.json", "config path, eg: -conf config.json")
+	flag.StringVar(&configFile, "conf", "config.yaml", "config path, eg: -conf config.yaml")
 }
 
 func main() {
@@ -49,13 +49,13 @@ func main() {
 		return
 	}
 	var c *config.Gateway
-	err = json.Unmarshal(fileBytes, &c)
+	err = yaml.Unmarshal(fileBytes, &c)
 	if err != nil {
-		slog.Error("Error parsing JSON:", err)
+		slog.Error("Error parsing YAML:", err)
 		return
 	}
 
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", c.Port))
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", c.Http.Port))
 	if err != nil {
 		slog.Fatal(err.Error())
 		return
@@ -102,9 +102,9 @@ func main() {
 						continue
 					}
 					c = &config.Gateway{}
-					err = json.Unmarshal(fileBytes, &c)
+					err = yaml.Unmarshal(fileBytes, &c)
 					if err != nil {
-						slog.Error("Error parsing JSON:", err)
+						slog.Error("Error parsing YAML:", err)
 						continue
 					}
 					p.LoadOrUpdateEndpoints(c)

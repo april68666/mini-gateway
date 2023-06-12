@@ -19,30 +19,24 @@ func Factory(c *config.Middleware) middleware.Middleware {
 	exposeHeaders := "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers, Content-Type"
 	credentials := "true"
 
-	args := make(map[string]string)
-	for _, arg := range c.Args {
-		args[arg.Key] = arg.Value
-
+	if v, ok := c.Args["allow-origin"]; ok {
+		allowOrigin = v.(string)
 	}
 
-	if v, ok := args["allow-origin"]; ok {
-		allowOrigin = v
+	if v, ok := c.Args["allow-headers"]; ok {
+		allowHeaders = v.(string)
 	}
 
-	if v, ok := args["allow-headers"]; ok {
-		allowHeaders = v
+	if v, ok := c.Args["allow-method"]; ok {
+		allowMethod = v.(string)
 	}
 
-	if v, ok := args["allow-method"]; ok {
-		allowMethod = v
+	if v, ok := c.Args["expose-headers"]; ok {
+		exposeHeaders = v.(string)
 	}
 
-	if v, ok := args["expose-headers"]; ok {
-		exposeHeaders = v
-	}
-
-	if v, ok := args["credentials"]; ok {
-		credentials = v
+	if v, ok := c.Args["credentials"]; ok {
+		credentials = v.(string)
 	}
 
 	return func(next http.RoundTripper) http.RoundTripper {

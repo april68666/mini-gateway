@@ -16,21 +16,15 @@ func init() {
 }
 
 func Factory(c *config.Middleware) middleware.Middleware {
-
-	args := make(map[string]string)
-	for _, arg := range c.Args {
-		args[arg.Key] = arg.Value
-
-	}
 	secret := "12345678"
-	if v, ok := args["secret"]; ok {
-		secret = v
+	if v, ok := c.Args["secret"]; ok {
+		secret = v.(string)
 	}
 
 	t := trie.NewTrie()
 
-	if v, ok := args["skipValidUrl"]; ok {
-		ss := strings.Split(v, ",")
+	if v, ok := c.Args["skipValidUrl"]; ok {
+		ss := strings.Split(v.(string), ",")
 		for _, s := range ss {
 			t.Insert(s, nil)
 		}

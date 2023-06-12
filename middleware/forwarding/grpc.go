@@ -7,9 +7,7 @@ import (
 	"mini-gateway/config"
 	"mini-gateway/middleware"
 	"mini-gateway/reqcontext"
-	"mini-gateway/slog"
 	"net/http"
-	"strconv"
 	"strings"
 )
 
@@ -22,21 +20,12 @@ func init() {
 func Factory(c *config.Middleware) middleware.Middleware {
 	httpStatus := 400
 	errorTemplate := "{\"code\": {status},\"message\": \"{message}\"}"
-	args := make(map[string]string)
-	for _, arg := range c.Args {
-		args[arg.Key] = arg.Value
 
+	if v, ok := c.Args["http_status"]; ok {
+		httpStatus = v.(int)
 	}
-
-	if v, ok := args["http_status"]; ok {
-		status, err := strconv.ParseInt(v, 10, 64)
-		if err != nil {
-			slog.Error("grpc middleware  http_status parse error:%s", err.Error())
-		}
-		httpStatus = int(status)
-	}
-	if v, ok := args["grpc_error_template"]; ok {
-		errorTemplate = v
+	if v, ok := c.Args["grpc_error_template"]; ok {
+		errorTemplate = v.(string)
 	}
 	return func(next http.RoundTripper) http.RoundTripper {
 		return &grpc{next: next, errorTemplate: errorTemplate, httpStatus: httpStatus}

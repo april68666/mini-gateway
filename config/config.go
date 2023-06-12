@@ -1,44 +1,43 @@
 package config
 
 type Gateway struct {
-	Port        int           `json:"port"`
-	Middlewares []*Middleware `json:"middlewares"`
-	Endpoints   []*Endpoint   `json:"endpoints"`
+	Http *Http `json:"http"`
+}
+
+type Http struct {
+	Port        int           `yaml:"port"`
+	Middlewares []*Middleware `yaml:"middlewares"`
+	Endpoints   []*Endpoint   `yaml:"endpoints"`
 }
 
 type Endpoint struct {
-	Targets     []Target      `json:"targets"`
-	Protocol    string        `json:"protocol"`
-	Timeout     int           `json:"timeout"`
-	LoadBalance string        `json:"load_balance"`
-	Predicates  *Predicates   `json:"predicates"`
-	Middlewares []*Middleware `json:"middlewares"`
+	Targets     []Target      `yaml:"targets"`
+	Protocol    string        `yaml:"protocol"`
+	Timeout     int           `yaml:"timeout"`
+	LoadBalance string        `yaml:"load_balance"`
+	Predicates  *Predicates   `yaml:"predicates"`
+	Middlewares []*Middleware `yaml:"middlewares"`
 }
 
 type Target struct {
-	Uri    string `json:"uri"`
-	Weight int    `json:"weight"`
-	Color  string `json:"color"`
+	Uri    string `yaml:"uri"`
+	Weight int    `yaml:"weight"`
+	Color  string `yaml:"color"`
 }
 
 type Predicates struct {
-	Path    string   `json:"path"`
-	Method  string   `json:"method"`
-	Headers []Header `json:"header"`
+	Path    string   `yaml:"path"`
+	Method  string   `yaml:"method"`
+	Headers []Header `yaml:"header"`
 }
 
 type Header struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
+	Key   string `yaml:"key"`
+	Value string `yaml:"value"`
 }
 
 type Middleware struct {
-	Name  string `json:"name"`
-	Order int    `json:"order"`
-	Args  []Arg  `json:"args"`
-}
-
-type Arg struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
+	Name  string                 `yaml:"name"`
+	Order int                    `yaml:"order"`
+	Args  map[string]interface{} `yaml:"args"`
 }

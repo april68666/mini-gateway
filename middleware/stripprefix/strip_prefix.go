@@ -3,9 +3,7 @@ package stripprefix
 import (
 	"mini-gateway/config"
 	"mini-gateway/middleware"
-	"mini-gateway/slog"
 	"net/http"
-	"strconv"
 	"strings"
 )
 
@@ -17,18 +15,9 @@ func init() {
 
 func Factory(c *config.Middleware) middleware.Middleware {
 
-	args := make(map[string]string)
-	for _, arg := range c.Args {
-		args[arg.Key] = arg.Value
-
-	}
 	call := 0
-	if v, ok := args["call"]; ok {
-		i, err := strconv.ParseInt(v, 10, 64)
-		if err != nil {
-			slog.Error("strip_prefix middleware  call parse error:%s", err.Error())
-		}
-		call = int(i)
+	if v, ok := c.Args["call"]; ok {
+		call = v.(int)
 	}
 
 	return func(next http.RoundTripper) http.RoundTripper {
