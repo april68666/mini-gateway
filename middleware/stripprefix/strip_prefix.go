@@ -14,7 +14,6 @@ func init() {
 }
 
 func Factory(c *config.Middleware) middleware.Middleware {
-
 	call := 0
 	if v, ok := c.Args["call"]; ok {
 		call = v.(int)

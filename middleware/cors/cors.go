@@ -4,6 +4,7 @@ import (
 	"mini-gateway/config"
 	"mini-gateway/middleware"
 	"net/http"
+	"strconv"
 )
 
 const NAME = "cors"
@@ -36,7 +37,7 @@ func Factory(c *config.Middleware) middleware.Middleware {
 	}
 
 	if v, ok := c.Args["credentials"]; ok {
-		credentials = v.(string)
+		credentials = strconv.FormatBool(v.(bool))
 	}
 
 	return func(next http.RoundTripper) http.RoundTripper {

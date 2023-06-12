@@ -26,14 +26,9 @@ type Target struct {
 }
 
 type Predicates struct {
-	Path    string   `yaml:"path"`
-	Method  string   `yaml:"method"`
-	Headers []Header `yaml:"header"`
-}
-
-type Header struct {
-	Key   string `yaml:"key"`
-	Value string `yaml:"value"`
+	Path    string                 `yaml:"path"`
+	Method  string                 `yaml:"method"`
+	Headers map[string]interface{} `yaml:"header"`
 }
 
 type Middleware struct {

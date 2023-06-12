@@ -30,6 +30,14 @@ type Proxy struct {
 }
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if err := recover(); err != nil {
+			w.WriteHeader(http.StatusBadGateway)
+			buf := make([]byte, 64<<10)
+			n := runtime.Stack(buf, false)
+			slog.Error("%s", buf[:n])
+		}
+	}()
 	p.router.ServeHTTP(w, r)
 }
 

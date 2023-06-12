@@ -22,8 +22,7 @@ func Factory(c *config.Middleware) middleware.Middleware {
 	}
 
 	t := trie.NewTrie()
-
-	if v, ok := c.Args["skipValidUrl"]; ok {
+	if v, ok := c.Args["skip_valid_url"]; ok {
 		ss := strings.Split(v.(string), ",")
 		for _, s := range ss {
 			t.Insert(s, nil)

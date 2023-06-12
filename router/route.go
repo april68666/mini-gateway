@@ -48,10 +48,10 @@ func (r *Route) matchPath(path string) bool {
 }
 
 func (r *Route) matchHeader(header http.Header) bool {
-	for i := 0; i < len(r.predicates.Headers); i++ {
-		head := r.predicates.Headers[i]
-		v := header.Get(head.Key)
-		if v == "" || v != head.Value {
+
+	for key, value := range r.predicates.Headers {
+		v := header.Get(key)
+		if v == "" || v != value {
 			return false
 		}
 	}
