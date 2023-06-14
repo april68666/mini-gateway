@@ -3,6 +3,8 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"mini-gateway/client"
 	"mini-gateway/config"
@@ -15,6 +17,7 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -26,8 +29,11 @@ func NewProxy(factory client.Factory, router router.Router) *Proxy {
 }
 
 type Proxy struct {
-	router  router.Router
-	factory client.Factory
+	router          router.Router
+	factory         client.Factory
+	mux             sync.Mutex
+	currentRoute    map[string]*route.Route
+	currentEndpoint map[string]*config.Endpoint
 }
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +48,72 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p.router.ServeHTTP(w, r)
 }
 
-func (p *Proxy) buildEndpoints(endpoint *config.Endpoint, ms []*config.Middleware) (http.Handler, error) {
+// UpdateEndpoints 重新生成所有端点，全局的中间件有更新必须调用此方法重新生成端点否则不生效。
+func (p *Proxy) UpdateEndpoints(globalMs []*config.Middleware, es []*config.Endpoint) (err error) {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+	rs := make([]*route.Route, 0)
+	currentRoute := make(map[string]*route.Route)
+	currentEndpoint := make(map[string]*config.Endpoint)
+	for _, e := range es {
+		if _, ok := currentEndpoint[e.Id]; ok {
+			return errors.New(fmt.Sprintf("endpoint id cannot be the same,id:%s", e.Id))
+		}
+		currentEndpoint[e.Id] = e
+
+		handler, err := p.buildEndpoints(globalMs, e)
+		if err != nil {
+			return err
+		}
+		r := route.NewRoute(e.Predicates, handler)
+		currentRoute[e.Id] = r
+		rs = append(rs, r)
+	}
+	p.router.RegisterOrUpdateRoutes(rs)
+
+	p.currentRoute = currentRoute
+	p.currentEndpoint = currentEndpoint
+	return nil
+}
+
+// UpdateEndpoint 重新生成单个端点，全局的中间件有更新必须调用 UpdateEndpoints 更新所有端点。
+func (p *Proxy) UpdateEndpoint(globalMs []*config.Middleware, e *config.Endpoint) (err error) {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+	handler, err := p.buildEndpoints(globalMs, e)
+	if err != nil {
+		return err
+	}
+	r := route.NewRoute(e.Predicates, handler)
+	p.currentRoute[e.Id] = r
+	p.currentEndpoint[e.Id] = e
+	rs := make([]*route.Route, 0)
+	for _, r := range p.currentRoute {
+		rs = append(rs, r)
+	}
+	p.router.RegisterOrUpdateRoutes(rs)
+	return nil
+}
+
+func (p *Proxy) RemoveEndpoint(endpointID string) {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+	if _, ok := p.currentRoute[endpointID]; !ok {
+		return
+	}
+	if _, ok := p.currentEndpoint[endpointID]; !ok {
+		return
+	}
+	delete(p.currentRoute, endpointID)
+	delete(p.currentEndpoint, endpointID)
+	rs := make([]*route.Route, 0)
+	for _, r := range p.currentRoute {
+		rs = append(rs, r)
+	}
+	p.router.RegisterOrUpdateRoutes(rs)
+}
+
+func (p *Proxy) buildEndpoints(ms []*config.Middleware, endpoint *config.Endpoint) (http.Handler, error) {
 	factory, err := p.factory(endpoint)
 	if err != nil {
 		return nil, err
@@ -83,8 +154,7 @@ func (p *Proxy) buildEndpoints(endpoint *config.Endpoint, ms []*config.Middlewar
 		resp, err := tripper.RoundTrip(req.Clone(ctx))
 		if err != nil {
 			w.WriteHeader(http.StatusBadGateway)
-			// TODO 需要更详细的日志比如路由是什么url是什么，参数是什么
-			slog.Error(err.Error())
+			slog.Error("Endpoint id:%s,error:%s", endpoint.Id, err.Error())
 			return
 		}
 
@@ -142,25 +212,6 @@ func (p *Proxy) buildEndpoints(endpoint *config.Endpoint, ms []*config.Middlewar
 			}
 		}()
 	})), nil
-}
-
-func (p *Proxy) LoadOrUpdateEndpoints(gateway *config.Gateway) {
-	defer func() {
-		if err := recover(); err != nil {
-			buf := make([]byte, 64<<10)
-			n := runtime.Stack(buf, false)
-			slog.Error("%s", buf[:n])
-		}
-	}()
-	routes := make([]*route.Route, 0)
-	for _, endpoint := range gateway.Http.Endpoints {
-		handler, err := p.buildEndpoints(endpoint, gateway.Http.Middlewares)
-		if err != nil {
-			return
-		}
-		routes = append(routes, route.NewRoute(endpoint.Predicates, handler))
-	}
-	p.router.LoadOrUpdateRoutes(routes)
 }
 
 func (p *Proxy) setXForwarded(req *http.Request) {

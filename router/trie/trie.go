@@ -5,42 +5,50 @@ import (
 )
 
 type Trie[T comparable] struct {
-	children map[string]*Trie[T]
-	wildCard bool
+	node *node[T]
+}
+
+type node[T comparable] struct {
 	value    T
+	path     string
+	wildCard bool
+	children map[string]*node[T]
 }
 
 func NewTrie[T comparable]() *Trie[T] {
-	root := &Trie[T]{}
-	root.children = make(map[string]*Trie[T])
-	root.wildCard = false
-	return root
+	return &Trie[T]{
+		node: &node[T]{
+			children: make(map[string]*node[T]),
+		},
+	}
 }
 
 func (t *Trie[T]) Insert(path string, value T) {
-	node := t
+	n := t.node
 	path = strings.Trim(path, "/")
 	for _, v := range strings.Split(path, "/") {
-		if node.children[v] == nil {
-			node.children[v] = NewTrie[T]()
+		if n.children[v] == nil {
+			n.children[v] = &node[T]{
+				children: make(map[string]*node[T]),
+				path:     v,
+			}
 		}
 		if v == "*" || strings.HasPrefix(v, "{") && strings.HasSuffix(v, "}") {
-			node.wildCard = true
+			n.wildCard = true
 		}
-		node = node.children[v]
+		n = n.children[v]
 	}
-	node.wildCard = true
-	node.value = value
+	n.value = value
 }
 
 func (t *Trie[T]) Search(path string) (map[string]string, T, bool) {
 	var zero T
-	node := t
+	n := t.node
 	path = strings.Trim(path, "/")
 	params := make(map[string]string)
 	for _, v := range strings.Split(path, "/") {
-		if node.wildCard {
-			for k := range node.children {
+		if n.wildCard {
+			for k := range n.children {
 				if strings.HasPrefix(k, "{") && strings.HasSuffix(k, "}") {
 					key := k[1 : len(k)-1]
 					params[key] = v
@@ -48,14 +56,30 @@ func (t *Trie[T]) Search(path string) (map[string]string, T, bool) {
 				v = k
 			}
 		}
-		if node.children[v] == nil {
+		if n.children[v] == nil {
 			return nil, zero, false
 		}
-		node = node.children[v]
+		n = n.children[v]
 	}
 
-	if len(node.children) == 0 {
-		return params, node.value, node.wildCard
+	if len(n.children) == 0 {
+		return params, n.value, true
 	}
 	return nil, zero, false
+}
+
+func (t *Trie[T]) Delete(path string) {
+	path = strings.Trim(path, "/")
+	nodes := make([]*node[T], 0)
+	n := t.node
+	nodes = append(nodes, n)
+	for _, v := range strings.Split(path, "/") {
+		n = n.children[v]
+		nodes = append(nodes, n)
+	}
+	for i := len(nodes) - 1; i > 0; i-- {
+		if len(nodes[i].children) == 0 {
+			delete(nodes[i-1].children, nodes[i].path)
+		}
+	}
 }

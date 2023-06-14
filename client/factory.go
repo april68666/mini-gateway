@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"golang.org/x/net/http2"
 	"mini-gateway/config"
 	"mini-gateway/selector"
@@ -22,8 +23,7 @@ func NewFactory() Factory {
 		for _, target := range endpoint.Targets {
 			parse, err := url.Parse(target.Uri)
 			if err != nil {
-				slog.Error(err.Error())
-				continue
+				return nil, errors.New(err.Error())
 			}
 
 			c := defaultHttpClient
@@ -42,7 +42,6 @@ func NewFactory() Factory {
 		}
 		s := f()
 		s.Update(nodes)
-
 		return newClient(s), nil
 	}
 }

@@ -60,9 +60,15 @@ func main() {
 		slog.Fatal(err.Error())
 		return
 	}
-	slog.Info(" Listening and serving HTTP on %s", listener.Addr().String())
+
 	p := proxy.NewProxy(client.NewFactory(), router.NewDefaultRouter())
-	p.LoadOrUpdateEndpoints(c)
+	err = p.UpdateEndpoints(c.Http.Middlewares, c.Http.Endpoints)
+	if err != nil {
+		slog.Fatal(err.Error())
+		return
+	}
+
+	slog.Info(" Listening and serving HTTP on %s", listener.Addr().String())
 	serv := server.NewHttpServer(p)
 	go func() {
 		err := serv.Run(listener)
@@ -72,7 +78,6 @@ func main() {
 		}
 	}()
 
-	exit := make(chan struct{})
 	go func() {
 		fileInfo, err := os.Stat(configFile)
 		if err != nil {
@@ -80,34 +85,32 @@ func main() {
 			return
 		}
 		lastModifiedTime := fileInfo.ModTime()
-
 		for {
 			time.Sleep(1 * time.Second)
-			select {
-			case <-exit:
-				return
-			default:
-				fileInfo, err := os.Stat(configFile)
+			fileInfo, err := os.Stat(configFile)
+			if err != nil {
+				slog.Error(err.Error())
+				continue
+			}
+			if fileInfo.ModTime() != lastModifiedTime {
+				slog.Info("Config file %s has been modified", configFile)
+				lastModifiedTime = fileInfo.ModTime()
+
+				fileBytes, err := os.ReadFile(configFile)
 				if err != nil {
 					slog.Error(err.Error())
 					continue
 				}
-				if fileInfo.ModTime() != lastModifiedTime {
-					slog.Info("File %s has been modified", configFile)
-					lastModifiedTime = fileInfo.ModTime()
-
-					fileBytes, err := os.ReadFile(configFile)
-					if err != nil {
-						slog.Error(err.Error())
-						continue
-					}
-					c = &config.Gateway{}
-					err = yaml.Unmarshal(fileBytes, &c)
-					if err != nil {
-						slog.Error("Error parsing YAML:", err)
-						continue
-					}
-					p.LoadOrUpdateEndpoints(c)
+				c = &config.Gateway{}
+				err = yaml.Unmarshal(fileBytes, &c)
+				if err != nil {
+					slog.Error("Error parsing YAML:", err)
+					continue
+				}
+				err = p.UpdateEndpoints(c.Http.Middlewares, c.Http.Endpoints)
+				if err != nil {
+					slog.Error(err.Error())
+					return
 				}
 			}
 		}
@@ -116,16 +119,10 @@ func main() {
 	quit := make(chan os.Signal)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 	<-quit
-	exit <- struct{}{}
 	slog.Info("Shutdown Server ...")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := serv.Shutdown(ctx); err != nil {
+	if err := serv.Shutdown(context.Background()); err != nil {
 		slog.Fatal("Server Shutdown:", err)
 	}
-	select {
-	case <-ctx.Done():
-		slog.Info("Timeout of 5 seconds")
-	}
+
 	slog.Info("Server exiting")
 }

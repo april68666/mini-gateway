@@ -4,7 +4,8 @@ http:
     - name: cors
     - name: logging
   endpoints:
-    - targets:
+    - id: api-service
+      targets:
         - uri: http://127.0.0.1:8000
           weight: 100
           color: test-service
@@ -16,17 +17,18 @@ http:
       timeout: 2000
       loadBalance: rotation
       predicates:
-        path: test-service/*/{id}
+        path: test-service/*
         method: GET
       middlewares:
         - name: stripPrefix
           args:
             call: 1
-    - targets:
+    - id: grpc-service
+      targets:
         - uri: http://127.0.0.1:8003
           weight: 100
       protocol: grpc
-#      timeout: 2000
+      timeout: 2000
       predicates:
         path: /hello.Greater/*
         method: POST

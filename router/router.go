@@ -10,7 +10,7 @@ import (
 
 type Router interface {
 	http.Handler
-	LoadOrUpdateRoutes(routes []*route.Route)
+	RegisterOrUpdateRoutes([]*route.Route)
 }
 
 type defaultRouter struct {
@@ -23,19 +23,19 @@ func NewDefaultRouter() Router {
 }
 
 func (r *defaultRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	if params, r, b := r.trie.Load().(*trie.Trie[*route.Route]).Search(req.URL.Path); b {
-		if r.Match(req) {
+	if params, re, b := r.trie.Load().(*trie.Trie[*route.Route]).Search(req.URL.Path); b {
+		if re.Match(req) {
 			if params != nil && len(params) > 0 {
 				req = req.WithContext(reqcontext.WithParams(req.Context(), params))
 			}
-			r.Handler().ServeHTTP(w, req)
+			re.Handler().ServeHTTP(w, req)
 			return
 		}
 	}
 	w.WriteHeader(http.StatusNotFound)
 }
 
-func (r *defaultRouter) LoadOrUpdateRoutes(routes []*route.Route) {
+func (r *defaultRouter) RegisterOrUpdateRoutes(routes []*route.Route) {
 	t := trie.NewTrie[*route.Route]()
 	for _, r := range routes {
 		for _, path := range r.Path() {
