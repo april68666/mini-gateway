@@ -29,11 +29,16 @@ func NewProxy(factory client.Factory, router router.Router) *Proxy {
 }
 
 type Proxy struct {
-	router          router.Router
-	factory         client.Factory
-	mux             sync.Mutex
-	currentRoute    map[string]*route.Route
-	currentEndpoint map[string]*config.Endpoint
+	router    router.Router
+	factory   client.Factory
+	mux       sync.Mutex
+	routeInfo map[string]*routeInfo
+}
+
+type routeInfo struct {
+	cancel   context.CancelFunc
+	route    *route.Route
+	endpoint *config.Endpoint
 }
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -53,26 +58,32 @@ func (p *Proxy) UpdateEndpoints(globalMs []*config.Middleware, es []*config.Endp
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	rs := make([]*route.Route, 0)
-	currentRoute := make(map[string]*route.Route)
-	currentEndpoint := make(map[string]*config.Endpoint)
+	ris := make(map[string]*routeInfo)
 	for _, e := range es {
-		if _, ok := currentEndpoint[e.Id]; ok {
-			return errors.New(fmt.Sprintf("endpoint id cannot be the same,id:%s", e.Id))
+		if _, ok := ris[e.ID]; ok {
+			return errors.New(fmt.Sprintf("endpoint id cannot be the same,id:%s", e.ID))
 		}
-		currentEndpoint[e.Id] = e
-
-		handler, err := p.buildEndpoints(globalMs, e)
+		ctx, cancel := context.WithCancel(context.Background())
+		handler, err := p.buildEndpoints(ctx, globalMs, e)
 		if err != nil {
+			cancel()
 			return err
 		}
 		r := route.NewRoute(e.Predicates, handler)
-		currentRoute[e.Id] = r
+		ris[e.ID] = &routeInfo{
+			route:    r,
+			endpoint: e,
+			cancel:   cancel,
+		}
 		rs = append(rs, r)
 	}
 	p.router.RegisterOrUpdateRoutes(rs)
-
-	p.currentRoute = currentRoute
-	p.currentEndpoint = currentEndpoint
+	// 通知所有ctx取消
+	for _, info := range p.routeInfo {
+		info.cancel()
+	}
+	// 替换
+	p.routeInfo = ris
 	return nil
 }
 
@@ -80,41 +91,48 @@ func (p *Proxy) UpdateEndpoints(globalMs []*config.Middleware, es []*config.Endp
 func (p *Proxy) UpdateEndpoint(globalMs []*config.Middleware, e *config.Endpoint) (err error) {
 	p.mux.Lock()
 	defer p.mux.Unlock()
-	handler, err := p.buildEndpoints(globalMs, e)
+	ctx, cancel := context.WithCancel(context.Background())
+	handler, err := p.buildEndpoints(ctx, globalMs, e)
 	if err != nil {
+		cancel()
 		return err
 	}
 	r := route.NewRoute(e.Predicates, handler)
-	p.currentRoute[e.Id] = r
-	p.currentEndpoint[e.Id] = e
 	rs := make([]*route.Route, 0)
-	for _, r := range p.currentRoute {
-		rs = append(rs, r)
+	for _, r := range p.routeInfo {
+		rs = append(rs, r.route)
 	}
 	p.router.RegisterOrUpdateRoutes(rs)
+	// 通知被替换的路由ctx取消
+	p.routeInfo[e.ID].cancel()
+	// 替换
+	p.routeInfo[e.ID] = &routeInfo{
+		cancel:   cancel,
+		route:    r,
+		endpoint: e,
+	}
 	return nil
 }
 
 func (p *Proxy) RemoveEndpoint(endpointID string) {
 	p.mux.Lock()
 	defer p.mux.Unlock()
-	if _, ok := p.currentRoute[endpointID]; !ok {
+	if _, ok := p.routeInfo[endpointID]; !ok {
 		return
 	}
-	if _, ok := p.currentEndpoint[endpointID]; !ok {
-		return
-	}
-	delete(p.currentRoute, endpointID)
-	delete(p.currentEndpoint, endpointID)
+
+	// 通知被删除的路由ctx取消
+	p.routeInfo[endpointID].cancel()
+	delete(p.routeInfo, endpointID)
 	rs := make([]*route.Route, 0)
-	for _, r := range p.currentRoute {
-		rs = append(rs, r)
+	for _, r := range p.routeInfo {
+		rs = append(rs, r.route)
 	}
 	p.router.RegisterOrUpdateRoutes(rs)
 }
 
-func (p *Proxy) buildEndpoints(ms []*config.Middleware, endpoint *config.Endpoint) (http.Handler, error) {
-	factory, err := p.factory(endpoint)
+func (p *Proxy) buildEndpoints(ctx context.Context, ms []*config.Middleware, endpoint *config.Endpoint) (http.Handler, error) {
+	factory, err := p.factory(ctx, endpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +172,7 @@ func (p *Proxy) buildEndpoints(ms []*config.Middleware, endpoint *config.Endpoin
 		resp, err := tripper.RoundTrip(req.Clone(ctx))
 		if err != nil {
 			w.WriteHeader(http.StatusBadGateway)
-			slog.Error("Endpoint id:%s,error:%s", endpoint.Id, err.Error())
+			slog.Error("Endpoint id:%s,error:%s", endpoint.ID, err.Error())
 			return
 		}
 

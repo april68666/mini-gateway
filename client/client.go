@@ -7,12 +7,13 @@ import (
 	"net/url"
 )
 
-func newClient(s selector.Selector) *client {
-	return &client{selector: s}
+func newClient(s selector.Selector, c *http.Client) *client {
+	return &client{selector: s, httpClient: c}
 }
 
 type client struct {
-	selector selector.Selector
+	selector   selector.Selector
+	httpClient *http.Client
 }
 
 func (c *client) RoundTrip(req *http.Request) (resp *http.Response, err error) {
@@ -20,9 +21,15 @@ func (c *client) RoundTrip(req *http.Request) (resp *http.Response, err error) {
 	if err != nil {
 		return nil, err
 	}
-	req.URL.Scheme = "http"
+
+	u, err := url.Parse(node.Uri())
+	if err != nil {
+		return nil, err
+	}
 	req.RequestURI = ""
-	req.URL.Host = node.Address()
+	req.URL.Host = u.Host
+	req.URL.Scheme = u.Scheme
+
 	if color, b := reqcontext.Color(req.Context()); b {
 		req.Header.Add("x-color", color)
 	}
@@ -35,7 +42,7 @@ func (c *client) RoundTrip(req *http.Request) (resp *http.Response, err error) {
 	req.Header.Set("Connection", "keep-alive")
 	req.Close = false
 
-	resp, err = node.Client().Do(req)
+	resp, err = c.httpClient.Do(req)
 	return
 }
 

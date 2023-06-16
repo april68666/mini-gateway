@@ -2,14 +2,15 @@ package selector
 
 import (
 	"context"
+	"mini-gateway/discovery"
 	"sync"
 )
 
 var selectorFactory = sync.Map{}
 
 type Selector interface {
-	Select(ctx context.Context) (*Node, error)
-	Update(nodes []*Node)
+	Select(ctx context.Context) (discovery.Node, error)
+	Apply(nodes []discovery.Node)
 }
 
 type Factory func() Selector

@@ -3,46 +3,55 @@ package client
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"golang.org/x/net/http2"
 	"mini-gateway/config"
+	"mini-gateway/discovery"
 	"mini-gateway/selector"
-	"mini-gateway/selector/rotation"
+	"mini-gateway/selector/weight"
 	"mini-gateway/slog"
 	"net"
 	"net/http"
-	"net/url"
+	"strings"
 	"time"
 )
 
-type Factory func(endpoint *config.Endpoint) (http.RoundTripper, error)
+type Factory func(ctx context.Context, endpoint *config.Endpoint) (http.RoundTripper, error)
 
-func NewFactory() Factory {
-	return func(endpoint *config.Endpoint) (http.RoundTripper, error) {
-		nodes := make([]*selector.Node, 0)
-		for _, target := range endpoint.Targets {
-			parse, err := url.Parse(target.Uri)
-			if err != nil {
-				return nil, errors.New(err.Error())
-			}
-
-			c := defaultHttpClient
-			if endpoint.Protocol == "grpc" {
-				c = defaultHttp2Client
-			}
-
-			node := selector.NewNode(parse.Scheme, parse.Host, endpoint.Protocol, target.Color, target.Weight, c)
-			nodes = append(nodes, node)
+func NewFactory(resolver discovery.Resolver) Factory {
+	return func(ctx context.Context, endpoint *config.Endpoint) (http.RoundTripper, error) {
+		c := defaultHttpClient
+		if strings.ToLower(endpoint.Protocol) == "grpc" {
+			c = defaultHttp2Client
 		}
 
 		f, ok := selector.Get(endpoint.LoadBalance)
 		if !ok {
 			slog.Warn("could not find load balancer selector %s,rotation is used by default", endpoint.LoadBalance)
-			f = rotation.Factor
+			f = weight.Factor
 		}
 		s := f()
-		s.Update(nodes)
-		return newClient(s), nil
+
+		if resolver != nil && len(strings.TrimSpace(endpoint.Discovery)) > 0 {
+			result, err := resolver.Resolve(context.Background(), endpoint.Discovery)
+			if err != nil {
+				return nil, err
+			}
+			s.Apply(result.Nodes)
+
+			err = resolver.Watch(ctx, endpoint.Discovery, func(result *discovery.Result) {
+				s.Apply(result.Nodes)
+			})
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			ns := make([]discovery.Node, 0)
+			for _, target := range endpoint.Targets {
+				ns = append(ns, discovery.NewNode(target.Uri, target.Weight, target.Tags))
+			}
+			s.Apply(ns)
+		}
+		return newClient(s, c), nil
 	}
 }
 

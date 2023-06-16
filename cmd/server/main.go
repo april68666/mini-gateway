@@ -23,7 +23,6 @@ import (
 	_ "mini-gateway/middleware/jwt"
 	_ "mini-gateway/middleware/logging"
 	_ "mini-gateway/middleware/stripprefix"
-	_ "mini-gateway/selector/rotation"
 	_ "mini-gateway/selector/weight"
 )
 
@@ -61,7 +60,7 @@ func main() {
 		return
 	}
 
-	p := proxy.NewProxy(client.NewFactory(), router.NewDefaultRouter())
+	p := proxy.NewProxy(client.NewFactory(nil), router.NewDefaultRouter())
 	err = p.UpdateEndpoints(c.Http.Middlewares, c.Http.Endpoints)
 	if err != nil {
 		slog.Fatal(err.Error())

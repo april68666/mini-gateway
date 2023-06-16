@@ -15,7 +15,6 @@ http:
           weight: 600
       protocol: http
       timeout: 2000
-      loadBalance: rotation
       predicates:
         path: test-service/*
         method: GET

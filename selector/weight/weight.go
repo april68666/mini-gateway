@@ -3,6 +3,7 @@ package weight
 import (
 	"context"
 	"math/rand"
+	"mini-gateway/discovery"
 	"mini-gateway/reqcontext"
 	"mini-gateway/selector"
 	"sync/atomic"
@@ -27,23 +28,24 @@ type weight struct {
 	// nodes map[string]*node
 }
 
-func (s *weight) Select(ctx context.Context) (*selector.Node, error) {
+func (s *weight) Select(ctx context.Context) (discovery.Node, error) {
 	color, _ := reqcontext.Color(ctx)
 	n := s.nodes.Load().(map[string]*node)[color]
 	index := rand.Intn(len(n.nodes))
 	return n.nodes[index], nil
 }
 
-func (s *weight) Update(nodes []*selector.Node) {
+func (s *weight) Apply(nodes []discovery.Node) {
 	ns := make(map[string]*node)
 	for _, n := range nodes {
 		for i := 0; i < n.Weight(); i++ {
-			if v, ok := ns[n.Color()]; ok {
+			color, _ := n.Tag("color")
+			if v, ok := ns[color]; ok {
 				v.nodes = append(v.nodes, n)
 			} else {
 				newNode := &node{}
 				newNode.nodes = append(newNode.nodes, n)
-				ns[n.Color()] = newNode
+				ns[color] = newNode
 			}
 		}
 	}
@@ -51,5 +53,5 @@ func (s *weight) Update(nodes []*selector.Node) {
 }
 
 type node struct {
-	nodes []*selector.Node
+	nodes []discovery.Node
 }

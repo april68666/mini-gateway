@@ -113,19 +113,18 @@ func (s *Slog) writeLog() {
 		case wg := <-s.flush:
 			s.writeAllBuf()
 			wg.Done()
-
+			return
 		}
 	}
 }
 
 func (s *Slog) writeAllBuf() {
-	isBreak := false
-	for !isBreak {
+	for {
 		select {
 		case msg := <-s.buff:
 			s.fmtPrint(msg)
 		default:
-			isBreak = true
+			return
 		}
 	}
 }
