@@ -5,6 +5,7 @@ import (
 	"mini-gateway/middleware"
 	"mini-gateway/slog"
 	"net/http"
+	"time"
 )
 
 const NAME = "logging"
@@ -24,6 +25,12 @@ type logging struct {
 }
 
 func (l *logging) RoundTrip(req *http.Request) (*http.Response, error) {
-	slog.Info("logging req %s", req.URL)
-	return l.next.RoundTrip(req)
+	start := time.Now()
+	trip, err := l.next.RoundTrip(req)
+	if err != nil {
+		return nil, err
+	}
+	cost := time.Since(start)
+	slog.Info("logging req %s,耗时:%fms", req.URL, cost.Seconds()*1000)
+	return trip, err
 }

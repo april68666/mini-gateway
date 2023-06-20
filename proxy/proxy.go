@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"golang.org/x/net/http/httpguts"
 	"io"
 	"mini-gateway/client"
 	"mini-gateway/config"
@@ -15,6 +16,7 @@ import (
 	"mini-gateway/slog"
 	"net"
 	"net/http"
+	"net/textproto"
 	"runtime"
 	"strings"
 	"sync"
@@ -36,9 +38,9 @@ type Proxy struct {
 }
 
 type routeInfo struct {
-	cancel   context.CancelFunc
-	route    *route.Route
-	endpoint *config.Endpoint
+	cancelCtx context.CancelFunc
+	route     *route.Route
+	endpoint  *config.Endpoint
 }
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -71,16 +73,16 @@ func (p *Proxy) UpdateEndpoints(globalMs []*config.Middleware, es []*config.Endp
 		}
 		r := route.NewRoute(e.Predicates, handler)
 		ris[e.ID] = &routeInfo{
-			route:    r,
-			endpoint: e,
-			cancel:   cancel,
+			route:     r,
+			endpoint:  e,
+			cancelCtx: cancel,
 		}
 		rs = append(rs, r)
 	}
 	p.router.RegisterOrUpdateRoutes(rs)
 	// 通知所有ctx取消
 	for _, info := range p.routeInfo {
-		info.cancel()
+		info.cancelCtx()
 	}
 	// 替换
 	p.routeInfo = ris
@@ -104,12 +106,12 @@ func (p *Proxy) UpdateEndpoint(globalMs []*config.Middleware, e *config.Endpoint
 	}
 	p.router.RegisterOrUpdateRoutes(rs)
 	// 通知被替换的路由ctx取消
-	p.routeInfo[e.ID].cancel()
+	p.routeInfo[e.ID].cancelCtx()
 	// 替换
 	p.routeInfo[e.ID] = &routeInfo{
-		cancel:   cancel,
-		route:    r,
-		endpoint: e,
+		cancelCtx: cancel,
+		route:     r,
+		endpoint:  e,
 	}
 	return nil
 }
@@ -122,7 +124,7 @@ func (p *Proxy) RemoveEndpoint(endpointID string) {
 	}
 
 	// 通知被删除的路由ctx取消
-	p.routeInfo[endpointID].cancel()
+	p.routeInfo[endpointID].cancelCtx()
 	delete(p.routeInfo, endpointID)
 	rs := make([]*route.Route, 0)
 	for _, r := range p.routeInfo {
@@ -145,90 +147,104 @@ func (p *Proxy) buildEndpoints(ctx context.Context, ms []*config.Middleware, end
 		return nil, err
 	}
 
-	return http.Handler(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	// https://github.com/golang/go/blob/98617fd23fa799173c33741987d41ee64cbb2a4f/src/net/http/httputil/reverseproxy.go#L332
+	return http.Handler(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		ctx := reqcontext.WithEndpoint(req.Context(), endpoint)
 		if endpoint.Timeout > 0 {
 			_ctx, cancel := context.WithTimeout(ctx, time.Millisecond*time.Duration(endpoint.Timeout))
 			defer cancel()
 			ctx = _ctx
 		}
+		outReq := req.Clone(ctx)
 
-		p.setXForwarded(req)
-
-		body, err := io.ReadAll(req.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusBadGateway)
-			slog.Error(err.Error())
-			return
+		if req.ContentLength == 0 {
+			outReq.Body = nil
+		}
+		if outReq.Body != nil {
+			defer outReq.Body.Close()
 		}
 
-		req.GetBody = func() (io.ReadCloser, error) {
+		outReq.Close = false
+
+		removeHopByHopHeaders(outReq.Header)
+
+		// 兼容 grpc 处理 https://github.com/golang/go/issues/21096
+		if httpguts.HeaderValuesContainsToken(req.Header["Te"], "trailers") {
+			outReq.Header.Set("Te", "trailers")
+		}
+
+		p.setXForwarded(outReq)
+
+		if outReq.Body != nil {
+			body, err := io.ReadAll(outReq.Body)
+			if err != nil {
+				rw.WriteHeader(http.StatusBadGateway)
+				slog.Error(err.Error())
+				return
+			}
+
+			// 处理重定向问题
+			outReq.GetBody = func() (io.ReadCloser, error) {
+				reader := bytes.NewReader(body)
+				return io.NopCloser(reader), nil
+			}
+
 			reader := bytes.NewReader(body)
-			return io.NopCloser(reader), nil
+			outReq.Body = io.NopCloser(reader)
 		}
 
-		reader := bytes.NewReader(body)
-		req.Body = io.NopCloser(reader)
-		resp, err := tripper.RoundTrip(req.Clone(ctx))
+		res, err := tripper.RoundTrip(outReq)
 		if err != nil {
-			w.WriteHeader(http.StatusBadGateway)
+			rw.WriteHeader(http.StatusBadGateway)
 			slog.Error("Endpoint id:%s,error:%s", endpoint.ID, err.Error())
 			return
 		}
 
-		headers := w.Header()
-		for k, v := range resp.Header {
-			headers[k] = v
+		if res.StatusCode == http.StatusSwitchingProtocols {
+			// TODO 处理 101 协议切换
+			rw.WriteHeader(http.StatusBadGateway)
+			return
 		}
-		w.WriteHeader(resp.StatusCode)
 
-		func() {
-			if resp.Body == nil {
-				return
+		removeHopByHopHeaders(res.Header)
+
+		copyHeader(rw.Header(), res.Header)
+		rw.WriteHeader(res.StatusCode)
+
+		announcedTrailers := len(res.Trailer)
+		if announcedTrailers > 0 {
+			trailerKeys := make([]string, 0, len(res.Trailer))
+			for k := range res.Trailer {
+				trailerKeys = append(trailerKeys, k)
 			}
-			defer func(Body io.ReadCloser) {
-				_ = Body.Close()
-			}(resp.Body)
-			_, err = io.Copy(w, resp.Body)
-			if err != nil {
-				return
+			rw.Header().Add("Trailer", strings.Join(trailerKeys, ", "))
+		}
+
+		_, err = io.Copy(rw, res.Body)
+		if err != nil {
+			defer res.Body.Close()
+			return
+		}
+		res.Body.Close()
+
+		if len(res.Trailer) > 0 {
+			if fl, ok := rw.(http.Flusher); ok {
+				fl.Flush()
 			}
-			/*
-				https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Headers/Trailer
-				https://pkg.go.dev/net/http#ResponseWriter
-				https://pkg.go.dev/net/http#example-ResponseWriter-Trailers
+		}
 
-				HTTP Trailers 是一种在 HTTP 报文中包含元数据的方式，通常用于在报文主体传输完毕后提供一些附加的信息。
-				如果您在做代理时需要处理 HTTP Trailers，可以考虑使用以下步骤：
-				等待原始请求的主体传输完毕。
-				对接收到的每个数据块进行处理，并检查是否存在 Trailer 标头指定的 Trailer 名称。
-				如果 Trailer 存在，则将 Trailer 名称和 Trailer 值存储在缓冲区中。
-				在传递响应之前，将缓冲区中的 Trailer 值添加到响应中。
-				需要注意的是，HTTP Trailers 的支持在不同的代理服务器上可能会有所不同，请确保您的代理服务器支持处理 HTTP Trailers。
-				同时，也要注意 Trailer 的数量和大小，因为过多或过大的 Trailer 可能会对性能产生负面影响。
+		if len(res.Trailer) == announcedTrailers {
+			copyHeader(rw.Header(), res.Trailer)
+			return
+		}
 
-				示例
-
-				HTTP/1.1 200 OK
-				Content-Type: text/plain
-				Transfer-Encoding: chunked
-				Trailer: Expires
-
-				7\r\n
-				Mozilla\r\n
-				9\r\n
-				Developer\r\n
-				7\r\n
-				Network\r\n
-				0\r\n
-				Expires: Wed, 21 Oct 2015 07:28:00 GMT\r\n
-				\r\n
-
-			*/
-			for k, v := range resp.Trailer {
-				headers[http.TrailerPrefix+k] = v
+		for k, vv := range res.Trailer {
+			k = http.TrailerPrefix + k
+			for _, v := range vv {
+				rw.Header().Add(k, v)
 			}
-		}()
+		}
+
 	})), nil
 }
 
@@ -242,5 +258,50 @@ func (p *Proxy) setXForwarded(req *http.Request) {
 		req.Header.Set("X-Forwarded-For", clientIP)
 	} else {
 		req.Header.Del("X-Forwarded-For")
+	}
+	req.Header.Set("X-Forwarded-Host", req.Host)
+	if req.TLS == nil {
+		req.Header.Set("X-Forwarded-Proto", "http")
+	} else {
+		req.Header.Set("X-Forwarded-Proto", "https")
+	}
+}
+
+func copyHeader(dst, src http.Header) {
+	for k, vv := range src {
+		for _, v := range vv {
+			dst.Add(k, v)
+		}
+	}
+}
+
+// Hop-by-hop headers. These are removed when sent to the backend.
+// As of RFC 7230, hop-by-hop headers are required to appear in the
+// Connection header field. These are the headers defined by the
+// obsoleted RFC 2616 (section 13.5.1) and are used for backward
+// compatibility.
+var hopHeaders = []string{
+	"Connection",
+	"Proxy-Connection", // non-standard but still sent by libcurl and rejected by e.g. google
+	"Keep-Alive",
+	"Proxy-Authenticate",
+	"Proxy-Authorization",
+	"Te",      // canonicalized version of "TE"
+	"Trailer", // not Trailers per URL above; https://www.rfc-editor.org/errata_search.php?eid=4522
+	"Transfer-Encoding",
+	"Upgrade",
+}
+
+func removeHopByHopHeaders(h http.Header) {
+	for _, f := range h["Connection"] {
+		for _, sf := range strings.Split(f, ",") {
+			if sf = textproto.TrimString(sf); sf != "" {
+				h.Del(sf)
+			}
+		}
+	}
+
+	for _, f := range hopHeaders {
+		h.Del(f)
 	}
 }

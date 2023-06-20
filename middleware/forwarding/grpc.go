@@ -85,6 +85,13 @@ func (g *grpc) RoundTrip(req *http.Request) (*http.Response, error) {
 	resp.Trailer = nil
 	resp.Header.Set("Content-Type", contentType)
 
+	defer func() {
+		resp.Header.Del("Content-Length")
+
+		resp.Header.Del("Grpc-Status")
+		resp.Header.Del("Grpc-Message")
+		resp.Header.Del("Grpc-Status-Details-Bin")
+	}()
 	if grpcStatus := resp.Header.Get("Grpc-Status"); grpcStatus != "0" {
 		data := strings.ReplaceAll(g.errorTemplate, "{status}", grpcStatus)
 		data = strings.ReplaceAll(data, "{message}", resp.Header.Get("Grpc-Message"))
@@ -98,6 +105,5 @@ func (g *grpc) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	resp.Body = io.NopCloser(bytes.NewReader(resData[5:]))
 	resp.ContentLength = int64(len(resData) - 5)
-	resp.Header.Del("Content-Length")
 	return resp, nil
 }

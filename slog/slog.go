@@ -32,7 +32,7 @@ var LevelMap = map[int32]string{
 var defaultSlog *Slog
 
 func init() {
-	defaultSlog = NewSlog(os.Stdout, 1024)
+	defaultSlog = NewSlog(os.Stdout, 4096)
 	defaultSlog.SetCallDepth(2)
 }
 

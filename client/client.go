@@ -1,23 +1,23 @@
 package client
 
 import (
+	"mini-gateway/loadbalance"
 	"mini-gateway/reqcontext"
-	"mini-gateway/selector"
 	"net/http"
 	"net/url"
 )
 
-func newClient(s selector.Selector, c *http.Client) *client {
-	return &client{selector: s, httpClient: c}
+func newClient(s loadbalance.Picker, c *http.Client) *client {
+	return &client{picker: s, httpClient: c}
 }
 
 type client struct {
-	selector   selector.Selector
+	picker     loadbalance.Picker
 	httpClient *http.Client
 }
 
 func (c *client) RoundTrip(req *http.Request) (resp *http.Response, err error) {
-	node, err := c.selector.Select(req.Context())
+	node, err := c.picker.Next(req.Context())
 	if err != nil {
 		return nil, err
 	}
@@ -37,10 +37,6 @@ func (c *client) RoundTrip(req *http.Request) (resp *http.Response, err error) {
 	if req.Form != nil {
 		req.URL.RawQuery = cleanQueryParams(req.URL.RawQuery)
 	}
-
-	// 防止下游瞎几把弄
-	req.Header.Set("Connection", "keep-alive")
-	req.Close = false
 
 	resp, err = c.httpClient.Do(req)
 	return

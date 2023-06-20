@@ -3,11 +3,12 @@ package client
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"golang.org/x/net/http2"
 	"mini-gateway/config"
 	"mini-gateway/discovery"
-	"mini-gateway/selector"
-	"mini-gateway/selector/weight"
+	"mini-gateway/loadbalance"
+	"mini-gateway/loadbalance/rotation"
 	"mini-gateway/slog"
 	"net"
 	"net/http"
@@ -24,10 +25,10 @@ func NewFactory(resolver discovery.Resolver) Factory {
 			c = defaultHttp2Client
 		}
 
-		f, ok := selector.Get(endpoint.LoadBalance)
+		f, ok := loadbalance.GetPicker(endpoint.LoadBalance)
 		if !ok {
-			slog.Warn("could not find load balancer selector %s,rotation is used by default", endpoint.LoadBalance)
-			f = weight.Factor
+			slog.Warn("could not find load balancer picker %s,rotation is used by default", endpoint.LoadBalance)
+			f = rotation.Factor
 		}
 		s := f()
 
@@ -56,20 +57,43 @@ func NewFactory(resolver discovery.Resolver) Factory {
 }
 
 var defaultHttpClient = &http.Client{
+	CheckRedirect: defaultCheckRedirect,
 	Transport: &http.Transport{
-		MaxIdleConns:        0,
-		MaxIdleConnsPerHost: 10000,
-		MaxConnsPerHost:     10000,
-		DisableCompression:  true,
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: defaultTransportDialContext(&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}),
+		MaxIdleConns:          0,
+		MaxIdleConnsPerHost:   10000,
+		MaxConnsPerHost:       10000,
+		DisableCompression:    true,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
 	},
 }
 
 var defaultHttp2Client = &http.Client{
+	CheckRedirect: defaultCheckRedirect,
 	Transport: &http2.Transport{
+		DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
+			return net.DialTimeout(network, addr, 30*time.Millisecond)
+		},
 		DisableCompression: true,
 		AllowHTTP:          true,
-		DialTLSContext: func(ctx context.Context, network, addr string, cfg *tls.Config) (net.Conn, error) {
-			return net.DialTimeout(network, addr, 300*time.Millisecond)
-		},
 	},
+}
+
+// https://github.com/golang/go/blob/bc21d6a4fcf2c957a3f279fa8725e16df6586864/src/net/http/client.go#LL690C36-L690C36
+func defaultCheckRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	return http.ErrUseLastResponse
+}
+
+// https://github.com/golang/go/blob/98617fd23fa799173c33741987d41ee64cbb2a4f/src/net/http/transport.go#L43
+func defaultTransportDialContext(dialer *net.Dialer) func(context.Context, string, string) (net.Conn, error) {
+	return dialer.DialContext
 }

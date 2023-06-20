@@ -18,12 +18,13 @@ import (
 	"syscall"
 	"time"
 
+	_ "mini-gateway/loadbalance/rotation"
+	_ "mini-gateway/loadbalance/weight"
 	_ "mini-gateway/middleware/cors"
 	_ "mini-gateway/middleware/forwarding"
 	_ "mini-gateway/middleware/jwt"
 	_ "mini-gateway/middleware/logging"
 	_ "mini-gateway/middleware/stripprefix"
-	_ "mini-gateway/selector/weight"
 )
 
 var (
