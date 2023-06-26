@@ -20,22 +20,33 @@ func init() {
 func Factory(c *config.Middleware) middleware.Middleware {
 	httpStatus := 400
 	errorTemplate := "{\"code\": {status},\"message\": \"{message}\"}"
-
+	clearGrpcHeader := false
 	if v, ok := c.Args["httpStatus"]; ok {
 		httpStatus = v.(int)
 	}
 	if v, ok := c.Args["grpcErrorTemplate"]; ok {
 		errorTemplate = v.(string)
 	}
+
+	if v, ok := c.Args["clearGrpcHeader"]; ok {
+		clearGrpcHeader = v.(bool)
+	}
+
 	return func(next http.RoundTripper) http.RoundTripper {
-		return &grpc{next: next, errorTemplate: errorTemplate, httpStatus: httpStatus}
+		return &grpc{
+			next:            next,
+			errorTemplate:   errorTemplate,
+			httpStatus:      httpStatus,
+			clearGrpcHeader: clearGrpcHeader,
+		}
 	}
 }
 
 type grpc struct {
-	next          http.RoundTripper
-	errorTemplate string
-	httpStatus    int
+	next            http.RoundTripper
+	errorTemplate   string
+	httpStatus      int
+	clearGrpcHeader bool
 }
 
 func (g *grpc) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -87,10 +98,11 @@ func (g *grpc) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	defer func() {
 		resp.Header.Del("Content-Length")
-
-		resp.Header.Del("Grpc-Status")
-		resp.Header.Del("Grpc-Message")
-		resp.Header.Del("Grpc-Status-Details-Bin")
+		if g.clearGrpcHeader {
+			resp.Header.Del("Grpc-Status")
+			resp.Header.Del("Grpc-Message")
+			resp.Header.Del("Grpc-Status-Details-Bin")
+		}
 	}()
 	if grpcStatus := resp.Header.Get("Grpc-Status"); grpcStatus != "0" {
 		data := strings.ReplaceAll(g.errorTemplate, "{status}", grpcStatus)

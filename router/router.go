@@ -4,6 +4,7 @@ import (
 	"mini-gateway/reqcontext"
 	"mini-gateway/router/route"
 	"mini-gateway/router/trie"
+	"mini-gateway/slog"
 	"net/http"
 	"sync/atomic"
 )
@@ -33,6 +34,11 @@ func (r *defaultRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	w.WriteHeader(http.StatusNotFound)
+	_, err := w.Write([]byte(http.StatusText(http.StatusNotFound)))
+	if err != nil {
+		slog.Error(err.Error())
+		return
+	}
 }
 
 func (r *defaultRouter) RegisterOrUpdateRoutes(routes []*route.Route) {

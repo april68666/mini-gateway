@@ -46,7 +46,7 @@ type routeInfo struct {
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if err := recover(); err != nil {
-			w.WriteHeader(http.StatusBadGateway)
+			writeError(w, err.(error))
 			buf := make([]byte, 64<<10)
 			n := runtime.Stack(buf, false)
 			slog.Error("%s", buf[:n])
@@ -178,7 +178,7 @@ func (p *Proxy) buildEndpoints(ctx context.Context, ms []*config.Middleware, end
 		if outReq.Body != nil {
 			body, err := io.ReadAll(outReq.Body)
 			if err != nil {
-				rw.WriteHeader(http.StatusBadGateway)
+				writeError(rw, err)
 				slog.Error(err.Error())
 				return
 			}
@@ -195,7 +195,7 @@ func (p *Proxy) buildEndpoints(ctx context.Context, ms []*config.Middleware, end
 
 		res, err := tripper.RoundTrip(outReq)
 		if err != nil {
-			rw.WriteHeader(http.StatusBadGateway)
+			writeError(rw, err)
 			slog.Error("Endpoint id:%s,error:%s", endpoint.ID, err.Error())
 			return
 		}
@@ -303,5 +303,21 @@ func removeHopByHopHeaders(h http.Header) {
 
 	for _, f := range hopHeaders {
 		h.Del(f)
+	}
+}
+
+func writeError(rw http.ResponseWriter, err error) {
+	httpStatus := http.StatusBadGateway
+	switch err {
+	case context.Canceled:
+		httpStatus = 499
+	case context.DeadlineExceeded:
+		httpStatus = http.StatusGatewayTimeout
+	}
+	rw.WriteHeader(httpStatus)
+	_, err = rw.Write([]byte(http.StatusText(httpStatus)))
+	if err != nil {
+		slog.Error(err.Error())
+		return
 	}
 }
