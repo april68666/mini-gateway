@@ -16,6 +16,7 @@ import (
 	"mini-gateway/slog"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/textproto"
 	"runtime"
 	"strings"
@@ -166,6 +167,13 @@ func (p *Proxy) buildEndpoints(ctx context.Context, ms []*config.Middleware, end
 
 		outReq.Close = false
 
+		reqUpType := upgradeType(outReq.Header)
+		if !IsPrint(reqUpType) {
+			err := fmt.Errorf("client tried to switch to invalid protocol %q", reqUpType)
+			writeError(rw, err)
+			slog.Error(err.Error())
+			return
+		}
 		removeHopByHopHeaders(outReq.Header)
 
 		// 兼容 grpc 处理 https://github.com/golang/go/issues/21096
@@ -173,7 +181,19 @@ func (p *Proxy) buildEndpoints(ctx context.Context, ms []*config.Middleware, end
 			outReq.Header.Set("Te", "trailers")
 		}
 
+		// 剥离逐跳头后添加协议升级信息比如 websockets
+		if reqUpType != "" {
+			outReq.Header.Set("Connection", "Upgrade")
+			outReq.Header.Set("Upgrade", reqUpType)
+		}
+
 		p.setXForwarded(outReq)
+
+		if _, ok := outReq.Header["User-Agent"]; !ok {
+			// If the outbound request doesn't have a User-Agent header set,
+			// don't send the default Go HTTP client User-Agent.
+			outReq.Header.Set("User-Agent", "")
+		}
 
 		if outReq.Body != nil {
 			body, err := io.ReadAll(outReq.Body)
@@ -193,6 +213,22 @@ func (p *Proxy) buildEndpoints(ctx context.Context, ms []*config.Middleware, end
 			outReq.Body = io.NopCloser(reader)
 		}
 
+		trace := &httptrace.ClientTrace{
+			Got1xxResponse: func(code int, header textproto.MIMEHeader) error {
+				h := rw.Header()
+				copyHeader(h, http.Header(header))
+				rw.WriteHeader(code)
+
+				// Clear headers, it's not automatically done by ResponseWriter.WriteHeader() for 1xx responses
+				for k := range h {
+					delete(h, k)
+				}
+
+				return nil
+			},
+		}
+		outReq = outReq.WithContext(httptrace.WithClientTrace(outReq.Context(), trace))
+
 		res, err := tripper.RoundTrip(outReq)
 		if err != nil {
 			writeError(rw, err)
@@ -209,7 +245,6 @@ func (p *Proxy) buildEndpoints(ctx context.Context, ms []*config.Middleware, end
 		removeHopByHopHeaders(res.Header)
 
 		copyHeader(rw.Header(), res.Header)
-		rw.WriteHeader(res.StatusCode)
 
 		announcedTrailers := len(res.Trailer)
 		if announcedTrailers > 0 {
@@ -220,6 +255,8 @@ func (p *Proxy) buildEndpoints(ctx context.Context, ms []*config.Middleware, end
 			rw.Header().Add("Trailer", strings.Join(trailerKeys, ", "))
 		}
 
+		rw.WriteHeader(res.StatusCode)
+
 		_, err = io.Copy(rw, res.Body)
 		if err != nil {
 			defer res.Body.Close()
@@ -228,9 +265,7 @@ func (p *Proxy) buildEndpoints(ctx context.Context, ms []*config.Middleware, end
 		res.Body.Close()
 
 		if len(res.Trailer) > 0 {
-			if fl, ok := rw.(http.Flusher); ok {
-				fl.Flush()
-			}
+			_ = http.NewResponseController(rw).Flush()
 		}
 
 		if len(res.Trailer) == announcedTrailers {
@@ -304,6 +339,24 @@ func removeHopByHopHeaders(h http.Header) {
 	for _, f := range hopHeaders {
 		h.Del(f)
 	}
+}
+
+func upgradeType(h http.Header) string {
+	if !httpguts.HeaderValuesContainsToken(h["Connection"], "Upgrade") {
+		return ""
+	}
+	return h.Get("Upgrade")
+}
+
+// IsPrint returns whether s is ASCII and printable according to
+// https://tools.ietf.org/html/rfc20#section-4.2.
+func IsPrint(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < ' ' || s[i] > '~' {
+			return false
+		}
+	}
+	return true
 }
 
 func writeError(rw http.ResponseWriter, err error) {
