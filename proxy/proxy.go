@@ -361,10 +361,10 @@ func IsPrint(s string) bool {
 
 func writeError(rw http.ResponseWriter, err error) {
 	httpStatus := http.StatusBadGateway
-	switch err {
-	case context.Canceled:
+	switch {
+	case errors.Is(err, context.Canceled):
 		httpStatus = 499
-	case context.DeadlineExceeded:
+	case errors.Is(err, context.DeadlineExceeded):
 		httpStatus = http.StatusGatewayTimeout
 	}
 	rw.WriteHeader(httpStatus)
