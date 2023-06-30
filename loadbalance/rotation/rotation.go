@@ -30,9 +30,9 @@ type rotationPicker struct {
 func (s *rotationPicker) Next(ctx context.Context) (discovery.Node, error) {
 	color, _ := reqcontext.Color(ctx)
 	n := s.nodes.Load().(map[string]*node)[color]
-	index := atomic.AddInt32(&n.index, 1)
+	index := n.index.Add(1)
 	if index >= int32(len(n.nodes)) {
-		atomic.StoreInt32(&n.index, 0)
+		n.index.Store(0)
 		index = 0
 	}
 	return n.nodes[index], nil
@@ -45,7 +45,8 @@ func (s *rotationPicker) Apply(nodes []discovery.Node) {
 		if v, ok := ns[color]; ok {
 			v.nodes = append(v.nodes, n)
 		} else {
-			newNode := &node{index: -1}
+			newNode := &node{index: atomic.Int32{}}
+			newNode.index.Store(-1)
 			newNode.nodes = append(newNode.nodes, n)
 			ns[color] = newNode
 		}
@@ -54,6 +55,6 @@ func (s *rotationPicker) Apply(nodes []discovery.Node) {
 }
 
 type node struct {
-	index int32
+	index atomic.Int32
 	nodes []discovery.Node
 }

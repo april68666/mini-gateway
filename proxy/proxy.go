@@ -367,10 +367,5 @@ func writeError(rw http.ResponseWriter, err error) {
 	case errors.Is(err, context.DeadlineExceeded):
 		httpStatus = http.StatusGatewayTimeout
 	}
-	rw.WriteHeader(httpStatus)
-	_, err = rw.Write([]byte(http.StatusText(httpStatus)))
-	if err != nil {
-		slog.Error(err.Error())
-		return
-	}
+	http.Error(rw, http.StatusText(httpStatus), httpStatus)
 }
