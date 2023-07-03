@@ -8,7 +8,6 @@ http:
       targets:
         - uri: http://127.0.0.1:8000
           weight: 100
-          color: test-service
         - uri: http://127.0.0.1:8001
           weight: 300
         - uri: http://127.0.0.1:8002

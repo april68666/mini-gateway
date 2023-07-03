@@ -47,7 +47,7 @@ type routeInfo struct {
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if err := recover(); err != nil {
-			writeError(w, err.(error))
+			errorHandler(w, r, err.(error))
 			buf := make([]byte, 64<<10)
 			n := runtime.Stack(buf, false)
 			slog.Error("%s", buf[:n])
@@ -170,8 +170,8 @@ func (p *Proxy) buildEndpoints(ctx context.Context, ms []*config.Middleware, end
 		reqUpType := upgradeType(outReq.Header)
 		if !IsPrint(reqUpType) {
 			err := fmt.Errorf("client tried to switch to invalid protocol %q", reqUpType)
-			writeError(rw, err)
 			slog.Error(err.Error())
+			errorHandler(rw, req, err)
 			return
 		}
 		removeHopByHopHeaders(outReq.Header)
@@ -190,20 +190,17 @@ func (p *Proxy) buildEndpoints(ctx context.Context, ms []*config.Middleware, end
 		p.setXForwarded(outReq)
 
 		if _, ok := outReq.Header["User-Agent"]; !ok {
-			// If the outbound request doesn't have a User-Agent header set,
-			// don't send the default Go HTTP client User-Agent.
 			outReq.Header.Set("User-Agent", "")
 		}
 
 		if outReq.Body != nil {
 			body, err := io.ReadAll(outReq.Body)
 			if err != nil {
-				writeError(rw, err)
 				slog.Error(err.Error())
+				errorHandler(rw, req, err)
 				return
 			}
 
-			// 处理重定向问题
 			outReq.GetBody = func() (io.ReadCloser, error) {
 				reader := bytes.NewReader(body)
 				return io.NopCloser(reader), nil
@@ -231,14 +228,13 @@ func (p *Proxy) buildEndpoints(ctx context.Context, ms []*config.Middleware, end
 
 		res, err := tripper.RoundTrip(outReq)
 		if err != nil {
-			writeError(rw, err)
 			slog.Error("Endpoint id:%s,error:%s", endpoint.ID, err.Error())
+			errorHandler(rw, req, err)
 			return
 		}
 
 		if res.StatusCode == http.StatusSwitchingProtocols {
-			// TODO 处理 101 协议切换
-			rw.WriteHeader(http.StatusBadGateway)
+			p.handleUpgradeResponse(rw, outReq, res)
 			return
 		}
 
@@ -260,12 +256,17 @@ func (p *Proxy) buildEndpoints(ctx context.Context, ms []*config.Middleware, end
 		_, err = io.Copy(rw, res.Body)
 		if err != nil {
 			defer res.Body.Close()
+			slog.Error(err.Error())
+			errorHandler(rw, req, err)
 			return
 		}
 		res.Body.Close()
 
 		if len(res.Trailer) > 0 {
-			_ = http.NewResponseController(rw).Flush()
+			err := http.NewResponseController(rw).Flush()
+			slog.Error(err.Error())
+			errorHandler(rw, req, err)
+			return
 		}
 
 		if len(res.Trailer) == announcedTrailers {
@@ -300,6 +301,95 @@ func (p *Proxy) setXForwarded(req *http.Request) {
 	} else {
 		req.Header.Set("X-Forwarded-Proto", "https")
 	}
+}
+
+func (p *Proxy) handleUpgradeResponse(rw http.ResponseWriter, req *http.Request, res *http.Response) {
+	reqUpType := upgradeType(req.Header)
+	resUpType := upgradeType(res.Header)
+	if !IsPrint(resUpType) {
+		err := fmt.Errorf("backend tried to switch to invalid protocol %q", resUpType)
+		slog.Error(err.Error())
+		errorHandler(rw, req, err)
+	}
+	if !EqualFold(reqUpType, resUpType) {
+		err := fmt.Errorf("backend tried to switch protocol %q when %q was requested", resUpType, reqUpType)
+		slog.Error(err.Error())
+		errorHandler(rw, req, err)
+		return
+	}
+
+	hj, ok := rw.(http.Hijacker)
+	if !ok {
+		err := fmt.Errorf("can't switch protocols using non-Hijacker ResponseWriter type %T", rw)
+		slog.Error(err.Error())
+		errorHandler(rw, req, err)
+		return
+	}
+	backConn, ok := res.Body.(io.ReadWriteCloser)
+	if !ok {
+		err := fmt.Errorf("internal error: 101 switching protocols response with non-writable body")
+		slog.Error(err.Error())
+		errorHandler(rw, req, err)
+		return
+	}
+
+	backConnCloseCh := make(chan bool)
+	go func() {
+		// Ensure that the cancellation of a request closes the backend.
+		// See issue https://golang.org/issue/35559.
+		select {
+		// 如果req设置了超时时间会被取消ws连接
+		//case <-req.Context().Done():
+		case <-backConnCloseCh:
+		}
+		backConn.Close()
+	}()
+
+	defer close(backConnCloseCh)
+
+	conn, brw, err := hj.Hijack()
+	if err != nil {
+		slog.Error(err.Error())
+		errorHandler(rw, req, err)
+		return
+	}
+	defer conn.Close()
+
+	copyHeader(rw.Header(), res.Header)
+
+	res.Header = rw.Header()
+	res.Body = nil
+	if err := res.Write(brw); err != nil {
+		slog.Error(err.Error())
+		errorHandler(rw, req, err)
+		return
+	}
+	if err := brw.Flush(); err != nil {
+		slog.Error(err.Error())
+		errorHandler(rw, req, err)
+		return
+	}
+	errc := make(chan error, 1)
+	spc := switchProtocolCopier{user: conn, backend: backConn}
+	go spc.copyToBackend(errc)
+	go spc.copyFromBackend(errc)
+	<-errc
+}
+
+// switchProtocolCopier exists so goroutines proxying data back and
+// forth have nice names in stacks.
+type switchProtocolCopier struct {
+	user, backend io.ReadWriter
+}
+
+func (c switchProtocolCopier) copyFromBackend(errc chan<- error) {
+	_, err := io.Copy(c.user, c.backend)
+	errc <- err
+}
+
+func (c switchProtocolCopier) copyToBackend(errc chan<- error) {
+	_, err := io.Copy(c.backend, c.user)
+	errc <- err
 }
 
 func copyHeader(dst, src http.Header) {
@@ -359,7 +449,29 @@ func IsPrint(s string) bool {
 	return true
 }
 
-func writeError(rw http.ResponseWriter, err error) {
+// EqualFold is strings.EqualFold, ASCII only. It reports whether s and t
+// are equal, ASCII-case-insensitively.
+func EqualFold(s, t string) bool {
+	if len(s) != len(t) {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if lower(s[i]) != lower(t[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// lower returns the ASCII lowercase version of b.
+func lower(b byte) byte {
+	if 'A' <= b && b <= 'Z' {
+		return b + ('a' - 'A')
+	}
+	return b
+}
+
+func errorHandler(rw http.ResponseWriter, req *http.Request, err error) {
 	httpStatus := http.StatusBadGateway
 	switch {
 	case errors.Is(err, context.Canceled):
