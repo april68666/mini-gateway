@@ -2,7 +2,6 @@ package client
 
 import (
 	"mini-gateway/loadbalance"
-	"mini-gateway/reqcontext"
 	"net/http"
 	"net/url"
 )
@@ -29,10 +28,6 @@ func (c *client) RoundTrip(req *http.Request) (resp *http.Response, err error) {
 	req.RequestURI = ""
 	req.URL.Host = u.Host
 	req.URL.Scheme = u.Scheme
-
-	if color, b := reqcontext.Color(req.Context()); b {
-		req.Header.Add("x-color", color)
-	}
 
 	resp, err = c.httpClient.Do(req)
 	return

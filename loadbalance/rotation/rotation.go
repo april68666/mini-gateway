@@ -2,6 +2,7 @@ package rotation
 
 import (
 	"context"
+	"fmt"
 	"mini-gateway/discovery"
 	"mini-gateway/loadbalance"
 	"mini-gateway/reqcontext"
@@ -30,6 +31,9 @@ type rotationPicker struct {
 func (s *rotationPicker) Next(ctx context.Context) (discovery.Node, error) {
 	color, _ := reqcontext.Color(ctx)
 	n := s.nodes.Load().(map[string]*node)[color]
+	if n == nil {
+		return nil, fmt.Errorf("no node for color:%s was found", color)
+	}
 	index := n.index.Add(1)
 	if index >= int32(len(n.nodes)) {
 		n.index.Store(0)

@@ -2,6 +2,7 @@ package weight
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"mini-gateway/discovery"
 	"mini-gateway/loadbalance"
@@ -31,6 +32,9 @@ type weight struct {
 func (s *weight) Next(ctx context.Context) (discovery.Node, error) {
 	color, _ := reqcontext.Color(ctx)
 	n := s.nodes.Load().(map[string]*node)[color]
+	if n == nil {
+		return nil, fmt.Errorf("no node for color:%s was found", color)
+	}
 	index := rand.Intn(len(n.nodes))
 	return n.nodes[index], nil
 }
