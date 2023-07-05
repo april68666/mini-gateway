@@ -264,9 +264,11 @@ func (p *Proxy) buildEndpoints(ctx context.Context, ms []*config.Middleware, end
 
 		if len(res.Trailer) > 0 {
 			err := http.NewResponseController(rw).Flush()
-			slog.Error(err.Error())
-			errorHandler(rw, req, err)
-			return
+			if err != nil {
+				slog.Error(err.Error())
+				errorHandler(rw, req, err)
+				return
+			}
 		}
 
 		if len(res.Trailer) == announcedTrailers {
