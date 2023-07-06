@@ -34,12 +34,16 @@ func (s *rotationPicker) Next(ctx context.Context) (discovery.Node, error) {
 	if n == nil {
 		return nil, fmt.Errorf("no node for color:%s was found", color)
 	}
-	index := n.index.Add(1)
-	if index >= int32(len(n.nodes)) {
-		n.index.Store(0)
-		index = 0
+
+	for {
+		index := n.index.Add(1)
+		if index < int32(len(n.nodes)) {
+			return n.nodes[index], nil
+		}
+		if n.index.CompareAndSwap(index, 0) {
+			return n.nodes[0], nil
+		}
 	}
-	return n.nodes[index], nil
 }
 
 func (s *rotationPicker) Apply(nodes []discovery.Node) {
