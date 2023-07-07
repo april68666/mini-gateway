@@ -15,9 +15,9 @@ func init() {
 
 func Factory(c *config.Middleware) middleware.Middleware {
 	allowOrigin := "*"
-	allowHeaders := "Content-Type,AccessToken,X-CSRF-Token, Authorization, X-Auth-Token"
-	allowMethod := "POST, GET, OPTIONS"
-	exposeHeaders := "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers, Content-Type"
+	allowHeaders := "*"
+	allowMethod := "*"
+	exposeHeaders := "*"
 	credentials := "true"
 
 	if v, ok := c.Args["allowOrigin"]; ok {
@@ -74,5 +74,10 @@ func (c *cors) RoundTrip(req *http.Request) (*http.Response, error) {
 			StatusCode: http.StatusNoContent,
 		}, nil
 	}
-	return c.next.RoundTrip(req)
+	response, err := c.next.RoundTrip(req)
+	if req.Header.Get("Sec-Fetch-Mode") == "cors" {
+		response.Header.Set("Access-Control-Allow-Origin", "*")
+	}
+
+	return response, err
 }

@@ -39,6 +39,9 @@ func (r *Route) Match(req *http.Request) bool {
 }
 
 func (r *Route) matchMethod(method string) bool {
+	if method == "OPTIONS" {
+		return true
+	}
 	match := false
 	ms := strings.Split(strings.TrimSpace(r.predicates.Method), ",")
 	if len(ms) > 0 {

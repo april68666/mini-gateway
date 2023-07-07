@@ -253,14 +253,16 @@ func (p *Proxy) buildEndpoints(ctx context.Context, ms []*config.Middleware, end
 
 		rw.WriteHeader(res.StatusCode)
 
-		_, err = io.Copy(rw, res.Body)
-		if err != nil {
-			defer res.Body.Close()
-			slog.Error(err.Error())
-			errorHandler(rw, req, err)
-			return
+		if res.Body != nil {
+			_, err = io.Copy(rw, res.Body)
+			if err != nil {
+				defer res.Body.Close()
+				slog.Error(err.Error())
+				errorHandler(rw, req, err)
+				return
+			}
+			res.Body.Close()
 		}
-		res.Body.Close()
 
 		if len(res.Trailer) > 0 {
 			err := http.NewResponseController(rw).Flush()
